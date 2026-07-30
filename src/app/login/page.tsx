@@ -3,11 +3,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase"; // Browser client instance
 import { Zap, Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
+  const supabase = createClient();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -32,6 +34,8 @@ export default function LoginPage() {
       setError(error.message);
       setLoading(false);
     } else {
+      // Cookies Sync ke liye pehle refresh karo, fir dashboard bhejo
+      router.refresh();
       router.push("/dashboard");
     }
   };
@@ -46,16 +50,17 @@ export default function LoginPage() {
   const handleGoogle = async () => {
     await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/dashboard` },
+      options: { 
+        redirectTo: `${window.location.origin}/auth/callback` // Server callback route par bhejega
+      },
     });
   };
 
-  // Shared style for input fields to keep them consistent in dark mode
   const inputStyle: React.CSSProperties = {
     width: "100%",
     padding: "14px 18px",
-    background: "#161f31", // Dark input background
-    border: "1px solid #2d3748", // Dark border
+    background: "#161f31",
+    border: "1px solid #2d3748",
     borderRadius: "14px",
     outline: "none",
     fontSize: "0.9rem",
@@ -66,13 +71,10 @@ export default function LoginPage() {
   return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f5a623", padding: "20px", fontFamily: "'Inter', sans-serif" }}>
       
-      {/* Main Split Card Container (Swapped Order for Desktop) */}
       <div className="login-container" style={{ width: "100%", maxWidth: "900px", minHeight: "540px", display: "grid", gridTemplateColumns: "1fr 1fr", background: "#0b0f17", borderRadius: "24px", boxShadow: "0 20px 40px rgba(0,0,0,0.3)", overflow: "hidden" }}>
 
-        {/* NEW LEFT PANEL: Mentora Text & Stats (Previously Right) */}
+        {/* LEFT PANEL: Mentora Branding */}
         <div style={{ background: "#f59e0b", display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "36px 32px", color: "#111827", boxSizing: "border-box" }}>
-          
-          {/* Top Branding & Quote */}
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
               <div style={{ width: "32px", height: "32px", borderRadius: "10px", background: "#111827", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -88,7 +90,6 @@ export default function LoginPage() {
               <span style={{ fontSize: "0.75rem", color: "rgba(17, 24, 39, 0.7)", fontWeight: 600 }}>&mdash; Robert Collier</span>
             </div>
 
-            {/* Stats Cards */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px", marginBottom: "16px" }}>
               <div style={{ background: "rgba(17, 24, 39, 0.1)", backdropFilter: "blur(4px)", padding: "10px 8px", borderRadius: "12px", textAlign: "center" }}>
                 <h4 style={{ fontSize: "0.9rem", fontWeight: 800, color: "#111827", margin: 0 }}>50K+</h4>
@@ -105,7 +106,6 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Bottom Action (Sign Up Link) */}
           <div style={{ textAlign: "center" }}>
             <p style={{ fontSize: "0.85rem", fontWeight: 600, color: "rgba(17, 24, 39, 0.85)", marginBottom: "10px" }}>
               New Here?
@@ -116,20 +116,13 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* NEW RIGHT PANEL: Sign In Form (Dark Mode - Previously Left) */}
+        {/* RIGHT PANEL: Sign In Form */}
         <div style={{ padding: "44px 36px", display: "flex", flexDirection: "column", justifyContent: "center", background: "#0b0f17", boxSizing: "border-box" }}>
           <h1 style={{ fontSize: "2rem", fontWeight: 800, textAlign: "center", color: "white", marginBottom: "20px", letterSpacing: "-0.02em" }}>Sign in</h1>
 
-          {/* Social Icons (Dark Mode Styled) */}
           <div style={{ display: "flex", justifyContent: "center", gap: "12px", marginBottom: "24px" }}>
-            <button type="button" onClick={handleGoogle} style={{ width: "42px", height: "42px", borderRadius: "50%", background: "#161f31", border: "1px solid #2d3748", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", color: "white" }} title="Facebook">
-              f
-            </button>
             <button type="button" onClick={handleGoogle} style={{ width: "42px", height: "42px", borderRadius: "50%", background: "#161f31", border: "1px solid #2d3748", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", color: "white" }} title="Google">
               G
-            </button>
-            <button type="button" onClick={handleGoogle} style={{ width: "42px", height: "42px", borderRadius: "50%", background: "#161f31", border: "1px solid #2d3748", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", color: "white" }} title="GitHub">
-              &lt;&gt;
             </button>
           </div>
 
@@ -138,7 +131,9 @@ export default function LoginPage() {
               {unconfirmedEmail ? (
                 <>
                   Email not verified.
-                  <button type="button" onClick={handleResendConfirmation} style={{ background: "none", border: "none", color: "#fca5a5", textDecoration: "underline", cursor: "pointer", marginLeft: "6px" }}>Resend</button>
+                  <button type="button" onClick={handleResendConfirmation} style={{ background: "none", border: "none", color: "#fca5a5", textDecoration: "underline", cursor: "pointer", marginLeft: "6px" }}>
+                    {resendStatus === "sending" ? "Sending..." : resendStatus === "sent" ? "Sent!" : "Resend"}
+                  </button>
                 </>
               ) : error}
             </div>
@@ -176,14 +171,11 @@ export default function LoginPage() {
         @media(max-width: 768px) {
           .login-container {
             grid-template-columns: 1fr !important;
-            /* On mobile, we want the form to be on top, so we change the flex direction by reversing the grid */
           }
           .login-container > div:first-child {
-            /* Mentora block becomes bottom */
             order: 2;
           }
           .login-container > div:last-child {
-            /* Form block becomes top */
             order: 1;
           }
         }
