@@ -118,7 +118,7 @@ export default function LoginPage() {
 
         {/* RIGHT PANEL: Sign In Form */}
         <div style={{ padding: "44px 36px", display: "flex", flexDirection: "column", justifyContent: "center", background: "#0b0f17", boxSizing: "border-box" }}>
-          <h1 style={{ fontSize: "2rem", fontWeight: 800, textAlign: "center", color: "white", marginBottom: "20px", letterSpacing: "-0.02em" }}>Sign in</h1>
+          <h1 style={{ fontSize: "2rem", fontWeight: 800, textAlign: "center", color: "white", marginBottom: "20px", letterSpacing: "-0.02em" }}>Login</h1>
 
           <div style={{ display: "flex", justifyContent: "center", gap: "12px", marginBottom: "24px" }}>
             <button type="button" onClick={handleGoogle} style={{ width: "42px", height: "42px", borderRadius: "50%", background: "#161f31", border: "1px solid #2d3748", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", color: "white" }} title="Google">
@@ -153,7 +153,7 @@ export default function LoginPage() {
 
             <div style={{ display: "flex", justifyContent: "center", marginTop: "6px", width: "100%" }}>
               <button type="submit" disabled={loading} style={{ width: "140px", padding: "12px", background: "#f1f5f9", border: "none", borderRadius: "20px", boxShadow: "5px 5px 10px rgba(0,0,0,0.2), -5px -5px 10px rgba(255,255,255,0.1)", color: "#1e293b", fontSize: "0.85rem", fontWeight: 700, cursor: "pointer", letterSpacing: "0.05em" }}>
-                {loading ? "LOADING..." : "SIGN IN"}
+                {loading ? "LOADING..." : "LOGIN"}
               </button>
             </div>
           </form>
