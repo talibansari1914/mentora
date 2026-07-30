@@ -124,8 +124,8 @@ export default function Home() {
         {/* Glow */}
         <div style={{ position: "absolute", top: "-80px", left: "50%", transform: "translateX(-50%)", width: "800px", height: "500px", background: "radial-gradient(ellipse,rgba(245,158,11,0.13) 0%,transparent 65%)", filter: "blur(40px)", pointerEvents: "none" }} />
 
-        <div style={{ ...G.inner, position: "relative", zIndex: 2, width: "100%" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "64px", alignItems: "center" }}>
+        <div className="mentora-container" style={{ ...G.inner, position: "relative", zIndex: 2, width: "100%" }}>
+          <div className="hero-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "64px", alignItems: "center" }}>
 
             {/* Left */}
             <div style={{ display: "flex", flexDirection: "column", gap: "28px" }}>
@@ -175,7 +175,7 @@ export default function Home() {
             {/* Right */}
             <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
               <div style={{ borderRadius: "20px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.07)", background: "#111827", boxShadow: "0 8px 32px rgba(0,0,0,0.4)" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1px", background: "rgba(255,255,255,0.06)" }}>
+                <div className="stats-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1px", background: "rgba(255,255,255,0.06)" }}>
                   <StatCell target={50000} label="Active Students" />
                   <StatCell target={10000} label="Study Materials" />
                   <StatCell target={500} label="Mock Tests" />
@@ -208,13 +208,13 @@ export default function Home() {
           FEATURES
       ══════════════════════════════════════════ */}
       <section id="features" style={{ padding: "96px 0", background: "#0D1220" }}>
-        <div style={G.inner}>
+        <div className="mentora-container" style={G.inner}>
           <div style={G.secHead}>
             <div style={G.badge}><span style={G.dot} />Everything You Need</div>
             <h2 style={G.h2}>One Platform. <span style={G.gradText}>All Your Needs.</span></h2>
             <p style={G.p}>From digital library to AI-powered doubt solving — Mentora covers every step of your preparation.</p>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "16px" }}>
+          <div className="features-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "16px" }}>
             {FEATURES.map(f => (
               <div key={f.title} style={{
                 gridColumn: f.wide ? "span 2" : "span 1",
@@ -245,13 +245,13 @@ export default function Home() {
           EXAMS
       ══════════════════════════════════════════ */}
       <section id="exams" style={{ padding: "96px 0", background: "#080C14" }}>
-        <div style={G.inner}>
+        <div className="mentora-container" style={G.inner}>
           <div style={G.secHead}>
             <div style={G.badge}><span style={G.dot} />Choose Your Path</div>
             <h2 style={G.h2}>Prepared for <span style={G.gradText}>Every Exam</span></h2>
             <p style={G.p}>Dedicated libraries, mock tests and study materials for every major competitive exam in India.</p>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: "14px" }}>
+          <div className="exams-grid" style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: "14px" }}>
             {EXAMS.map(e => (
               <div key={e.name} style={{ borderRadius: "18px", padding: "24px 16px", textAlign: "center", border: e.active ? "1px solid rgba(245,158,11,0.4)" : "1px solid rgba(255,255,255,0.07)", background: e.active ? "linear-gradient(160deg,rgba(245,158,11,0.1),transparent)" : "#111827", transition: "all 0.25s", cursor: "pointer" }}
                 onMouseEnter={e2 => { (e2.currentTarget as HTMLElement).style.transform = "translateY(-5px)"; (e2.currentTarget as HTMLElement).style.borderColor = "rgba(245,158,11,0.4)"; (e2.currentTarget as HTMLElement).style.boxShadow = "0 12px 32px rgba(0,0,0,0.4)"; }}
@@ -275,12 +275,12 @@ export default function Home() {
           HOW IT WORKS
       ══════════════════════════════════════════ */}
       <section id="how" style={{ padding: "96px 0", background: "#0D1220" }}>
-        <div style={{ ...G.inner, maxWidth: "920px" }}>
+        <div className="mentora-container" style={{ ...G.inner, maxWidth: "920px" }}>
           <div style={G.secHead}>
             <div style={G.badge}><span style={G.dot} />Simple & Powerful</div>
             <h2 style={G.h2}>Up and running <span style={G.gradText}>in minutes</span></h2>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr auto 1fr", alignItems: "center" }}>
+          <div className="steps-grid" style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr auto 1fr", alignItems: "center" }}>
             {STEPS.map((s, i) => (
               <div key={s.n} style={{ display: "contents" }}>
                 <div style={{ background: "#111827", border: "1px solid rgba(255,255,255,0.07)", borderRadius: "18px", padding: "36px 24px", textAlign: "center", transition: "all 0.25s" }}
@@ -291,7 +291,7 @@ export default function Home() {
                   <p style={{ fontSize: "0.85rem", color: "#64748B", lineHeight: 1.65 }}>{s.desc}</p>
                 </div>
                 {i < 2 && (
-                  <div style={{ color: "#334155", fontSize: "1.4rem", padding: "0 16px", textAlign: "center" }}>→</div>
+                  <div className="steps-arrow" style={{ color: "#334155", fontSize: "1.4rem", padding: "0 16px", textAlign: "center" }}>→</div>
                 )}
               </div>
             ))}
@@ -303,15 +303,15 @@ export default function Home() {
           PRICING
       ══════════════════════════════════════════ */}
       <section id="pricing" style={{ padding: "96px 0", background: "#080C14" }}>
-        <div style={{ ...G.inner, maxWidth: "980px" }}>
+        <div className="mentora-container" style={{ ...G.inner, maxWidth: "980px" }}>
           <div style={G.secHead}>
             <div style={G.badge}><span style={G.dot} />Simple Pricing</div>
             <h2 style={G.h2}>Invest in your <span style={G.gradText}>future</span></h2>
             <p style={G.p}>Start free, upgrade when you need more. Cancel anytime.</p>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "20px", alignItems: "center" }}>
+          <div className="pricing-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "20px", alignItems: "center" }}>
             {PLANS.map(p => (
-              <div key={p.tier} style={{ position: "relative", borderRadius: "22px", padding: "32px 28px", display: "flex", flexDirection: "column", border: p.popular ? "1px solid rgba(245,158,11,0.4)" : "1px solid rgba(255,255,255,0.07)", background: p.popular ? "linear-gradient(160deg,rgba(245,158,11,0.07),#111827)" : "#111827", boxShadow: p.popular ? "0 0 48px rgba(245,158,11,0.1)" : "none", transform: p.popular ? "scale(1.04)" : "scale(1)", transition: "all 0.25s" }}
+              <div key={p.tier} className="pricing-card" style={{ position: "relative", borderRadius: "22px", padding: "32px 28px", display: "flex", flexDirection: "column", border: p.popular ? "1px solid rgba(245,158,11,0.4)" : "1px solid rgba(255,255,255,0.07)", background: p.popular ? "linear-gradient(160deg,rgba(245,158,11,0.07),#111827)" : "#111827", boxShadow: p.popular ? "0 0 48px rgba(245,158,11,0.1)" : "none", transform: p.popular ? "scale(1.04)" : "scale(1)", transition: "all 0.25s" }}
                 onMouseEnter={e => { if (!p.popular) (e.currentTarget as HTMLElement).style.transform = "translateY(-3px)"; }}
                 onMouseLeave={e => { if (!p.popular) (e.currentTarget as HTMLElement).style.transform = "translateY(0)"; }}>
                 {p.popular && (
@@ -376,8 +376,8 @@ export default function Home() {
           FOOTER
       ══════════════════════════════════════════ */}
       <footer style={{ borderTop: "1px solid rgba(255,255,255,0.07)", background: "#0D1220", paddingTop: "64px", paddingBottom: "32px" }}>
-        <div style={G.inner}>
-          <div style={{ display: "grid", gridTemplateColumns: "1.5fr repeat(4,1fr)", gap: "48px", marginBottom: "48px" }}>
+        <div className="mentora-container" style={G.inner}>
+          <div className="footer-grid" style={{ display: "grid", gridTemplateColumns: "1.5fr repeat(4,1fr)", gap: "48px", marginBottom: "48px" }}>
             <div>
               <Link href="/" style={{ display: "inline-flex", alignItems: "center", gap: "10px", textDecoration: "none", marginBottom: "16px" }}>
                 <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: G.grad, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.9rem", fontWeight: "bold" }}>⚡</div>
@@ -415,6 +415,33 @@ export default function Home() {
           </div>
         </div>
       </footer>
+
+      <style>{`
+        @media (max-width: 968px) {
+          .mentora-container { padding: 0 24px; }
+
+          .hero-grid { grid-template-columns: 1fr !important; gap: 40px !important; }
+          .features-grid { grid-template-columns: repeat(2,1fr) !important; }
+          .exams-grid { grid-template-columns: repeat(3,1fr) !important; }
+
+          .steps-grid { grid-template-columns: 1fr !important; gap: 24px !important; }
+          .steps-arrow { transform: rotate(90deg); padding: 8px 0 !important; }
+
+          .pricing-grid { grid-template-columns: 1fr !important; max-width: 420px; margin: 0 auto; }
+          .pricing-card { transform: scale(1) !important; }
+
+          .footer-grid { grid-template-columns: repeat(2,1fr) !important; gap: 32px !important; }
+        }
+
+        @media (max-width: 600px) {
+          .mentora-container { padding: 0 18px; }
+
+          .features-grid { grid-template-columns: 1fr !important; }
+          .exams-grid { grid-template-columns: repeat(2,1fr) !important; }
+          .stats-grid { grid-template-columns: 1fr !important; }
+          .footer-grid { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
     </div>
   );
 }

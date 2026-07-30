@@ -1,18 +1,38 @@
 "use client";
+
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import {
   PieChart, Pie, Cell, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
-  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
+  LineChart, Line
 } from "recharts";
 
-const G = {
-  grad: "linear-gradient(120deg,#F59E0B,#F97316)",
-  card: { background: "#111827", border: "1px solid rgba(255,255,255,0.07)", borderRadius: "18px" },
+// ── Theme / Style Constants (Matching the Image) ──
+const theme = {
+  bg: "#0B0E14", // Deep background
+  cardBg: "#131620", // Card background
+  border: "1px solid rgba(255,255,255,0.04)",
+  textMain: "#FFFFFF",
+  textMuted: "#8F95B2",
+  green: "#10B981",
+  red: "#F43F5E",
+  accentPurple: "#6366F1",
+  accentBlue: "#06B6D4",
+  accentPink: "#EC4899",
+  accentOrange: "#F59E0B",
+  accentYellow: "#EAB308",
+  barMuted: "#1E2235"
 };
 
-const EXAM_LABEL: Record<string, string> = { jee: "JEE", neet: "NEET", upsc: "UPSC", ssc: "SSC" };
+const G = {
+  card: { 
+    background: theme.cardBg, 
+    border: theme.border, 
+    borderRadius: "16px", 
+    padding: "24px" 
+  },
+};
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type SubjectBreakdown = {
@@ -21,6 +41,7 @@ type SubjectBreakdown = {
   wrong: number;
   skipped: number;
   accuracy: number;
+  attempted: number;
 };
 
 type StoredResult = {
@@ -36,7 +57,7 @@ type StoredResult = {
   subjectBreakdown: SubjectBreakdown[];
 };
 
-// ── Read from localStorage (no import needed — avoids module resolution issues) ──
+// ── Data Fetching ──
 function getLatestFromStorage(): StoredResult | null {
   if (typeof window === "undefined") return null;
   try {
@@ -49,198 +70,267 @@ function getLatestFromStorage(): StoredResult | null {
   }
 }
 
-// ── Main result content ────────────────────────────────────────────────────
+// ── Custom Tooltip Components ──
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div style={{ background: "rgba(19, 22, 32, 0.8)", backdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.1)", padding: "12px 16px", borderRadius: "12px", boxShadow: "0 8px 32px rgba(0,0,0,0.4)" }}>
+        <p style={{ color: theme.textMuted, fontSize: "0.8rem", marginBottom: "8px" }}>{label}</p>
+        {payload.map((entry: any, index: number) => (
+          <div key={index} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+            <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: entry.color }} />
+            <span style={{ color: "white", fontSize: "0.9rem", fontWeight: 600 }}>{entry.value}</span>
+            <span style={{ color: theme.textMuted, fontSize: "0.8rem" }}>{entry.name}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
+
+// ── Main Content ───────────────────────────────────────────────────────────
 function ResultContent() {
   const params = useSearchParams();
   const [stored, setStored] = useState<StoredResult | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    const r = getLatestFromStorage();
-    setStored(r);
+    setStored(getLatestFromStorage());
     setLoaded(true);
   }, []);
 
-  // Prefer localStorage data; fall back to URL params
   const correct  = stored?.correct  ?? parseInt(params.get("correct")  || "0");
   const wrong    = stored?.wrong    ?? parseInt(params.get("wrong")    || "0");
   const skipped  = stored?.skipped  ?? parseInt(params.get("skipped")  || "0");
   const score    = stored?.score    ?? parseInt(params.get("score")    || "0");
   const total    = stored?.total    ?? parseInt(params.get("total")    || "40");
   const timeUsed = stored?.timeUsed ?? parseInt(params.get("timeUsed") || "0");
-  const exam     = stored?.exam     ?? params.get("exam")  ?? "jee";
-  const title    = stored?.title    ?? params.get("title") ?? "Mock Test";
-  const breakdown: SubjectBreakdown[] = stored?.subjectBreakdown ?? [];
-
+  
+  const totalQuestions = correct + wrong + skipped;
   const accuracy   = (correct + wrong) > 0 ? Math.round((correct / (correct + wrong)) * 100) : 0;
   const percentile = Math.min(99, Math.round((score / (total || 1)) * 100 * 0.95 + 4));
+  const pacePerQ   = totalQuestions > 0 ? Math.round(timeUsed / totalQuestions) : 0;
+
+  const rawBreakdown: SubjectBreakdown[] = stored?.subjectBreakdown ?? [];
+  const breakdown = rawBreakdown.map(s => ({
+    ...s,
+    attempted: s.correct + s.wrong,
+    score: (s.correct * 4) - (s.wrong * 1) // Mocking standard scoring for the chart
+  }));
 
   const pieData = [
-    { name: "Correct", value: correct, color: "#22C55E" },
-    { name: "Wrong",   value: wrong,   color: "#EF4444" },
-    { name: "Skipped", value: skipped, color: "#475569" },
+    { name: "Correct", value: correct, color: theme.accentPurple },
+    { name: "Wrong",   value: wrong,   color: theme.accentPink },
+    { name: "Skipped", value: skipped, color: theme.accentYellow },
   ];
 
-  const fmtTime = (s: number) => `${Math.floor(s / 60)}m ${s % 60}s`;
+  // Find highest score index to highlight the bar like in the image
+  const highestScoreIdx = breakdown.length > 0 
+    ? breakdown.reduce((maxIdx, curr, idx, arr) => curr.score > arr[maxIdx].score ? idx : maxIdx, 0)
+    : -1;
+
+  if (!loaded) return <div style={{ minHeight: "100vh", background: theme.bg, color: theme.textMuted, display: "flex", alignItems: "center", justifyContent: "center" }}>Loading Dashboard...</div>;
 
   return (
-    <div style={{ minHeight: "100vh", background: "#080C14", color: "white", fontFamily: "'DM Sans',sans-serif" }}>
+    <div style={{ minHeight: "100vh", background: theme.bg, color: theme.textMain, fontFamily: "'Inter', sans-serif" }}>
 
-      {/* Header */}
-      <header style={{ background: "#0D1220", borderBottom: "1px solid rgba(255,255,255,0.07)", padding: "16px 32px" }}>
-        <div style={{ maxWidth: "1100px", margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <a href="/dashboard" style={{ display: "inline-flex", alignItems: "center", gap: "9px", textDecoration: "none" }}>
-            <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: G.grad, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.9rem", fontWeight: "bold" }}>⚡</div>
-            <span style={{ fontWeight: 800, fontSize: "1.2rem", color: "white" }}>Mentor<span style={{ color: "#F59E0B" }}>a</span></span>
-          </a>
-          <a href="/mock-tests" style={{ fontSize: "0.85rem", color: "#64748B", textDecoration: "none" }}>← Back to Tests</a>
-        </div>
-      </header>
-
-      <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "40px 32px 60px" }}>
-
-        {/* ── Score Hero ── */}
-        <div style={{ ...G.card, padding: "40px", textAlign: "center", marginBottom: "24px", position: "relative", overflow: "hidden" }}>
-          <div style={{ position: "absolute", top: "-60px", left: "50%", transform: "translateX(-50%)", width: "400px", height: "200px", background: "rgba(245,158,11,0.1)", filter: "blur(60px)", pointerEvents: "none" }} />
-
-          <div style={{ position: "relative" }}>
-            <span style={{ display: "inline-block", fontSize: "0.7rem", fontWeight: 700, color: "#F59E0B", background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.2)", borderRadius: "100px", padding: "3px 12px", marginBottom: "10px" }}>
-              {EXAM_LABEL[exam] || exam.toUpperCase()}
-            </span>
-            <p style={{ fontSize: "0.85rem", color: "#94A3B8", marginBottom: "4px" }}>{title}</p>
-            <p style={{ fontSize: "0.72rem", color: "#64748B", marginBottom: "16px", textTransform: "uppercase", letterSpacing: "0.06em" }}>Test Completed 🎉</p>
-
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: "6px", marginBottom: "10px" }}>
-              <span style={{ fontSize: "4rem", fontWeight: 900, letterSpacing: "-0.04em", background: G.grad, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", lineHeight: 1 }}>{score}</span>
-              <span style={{ fontSize: "1.5rem", color: "#64748B", fontWeight: 600 }}>/ {total}</span>
-            </div>
-            <p style={{ fontSize: "0.9rem", color: "#94A3B8" }}>
-              You scored better than <strong style={{ color: "#F59E0B" }}>{percentile}%</strong> of students
-            </p>
-
-            <div style={{ display: "flex", justifyContent: "center", gap: "32px", marginTop: "28px", flexWrap: "wrap" }}>
-              {[
-                { label: "Correct",   val: correct,         color: "#22C55E" },
-                { label: "Wrong",     val: wrong,           color: "#EF4444" },
-                { label: "Skipped",   val: skipped,         color: "#64748B" },
-                { label: "Accuracy",  val: `${accuracy}%`,  color: "#F59E0B" },
-                { label: "Time Used", val: fmtTime(timeUsed), color: "#22D3EE" },
-              ].map(s => (
-                <div key={s.label}>
-                  <p style={{ fontSize: "1.3rem", fontWeight: 800, color: s.color, fontFamily: "monospace" }}>{s.val}</p>
-                  <p style={{ fontSize: "0.7rem", color: "#64748B" }}>{s.label}</p>
-                </div>
-              ))}
-            </div>
-          </div>
+      {/* ── Dashboard Content ── */}
+      <div style={{ maxWidth: "1400px", margin: "0 auto", padding: "40px" }}>
+        
+        {/* Title Row */}
+        <div style={{ marginBottom: "24px" }}>
+          <h1 style={{ fontSize: "1.8rem", fontWeight: 500 }}>Test Analysis</h1>
         </div>
 
-        {/* ── Analytics ── */}
-        {!loaded ? (
-          <div style={{ ...G.card, padding: "40px", textAlign: "center", marginBottom: "24px" }}>
-            <p style={{ color: "#64748B" }}>Loading analytics...</p>
-          </div>
-        ) : breakdown.length > 0 ? (
-          <>
-            {/* Pie + Bar */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "18px", marginBottom: "18px" }}>
-              <div style={{ ...G.card, padding: "24px" }}>
-                <h3 style={{ fontSize: "0.95rem", fontWeight: 700, marginBottom: "16px" }}>Answer Breakdown</h3>
-                <ResponsiveContainer width="100%" height={220}>
-                  <PieChart>
-                    <Pie data={pieData} dataKey="value" cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={3}>
-                      {pieData.map((e, i) => <Cell key={i} fill={e.color} stroke="none" />)}
-                    </Pie>
-                    <Tooltip contentStyle={{ background: "#1A2336", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px", fontSize: "0.8rem" }} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div style={{ display: "flex", justifyContent: "center", gap: "16px", marginTop: "8px" }}>
-                  {pieData.map(d => (
-                    <div key={d.name} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.75rem" }}>
-                      <span style={{ width: "9px", height: "9px", borderRadius: "3px", background: d.color }} />
-                      <span style={{ color: "#94A3B8" }}>{d.name}</span>
-                    </div>
-                  ))}
-                </div>
+        {/* ── Main Bento Grid ── */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: "20px" }}>
+          
+          {/* TOP LEFT: 2x2 KPI Grid (Spans 5 cols) */}
+          <div style={{ gridColumn: "span 5", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+            
+            <div style={{ ...G.card, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ color: theme.textMuted, fontSize: "0.9rem" }}>Total Score</span>
+                <span style={{ color: theme.textMuted }}>📄</span>
               </div>
+              <div>
+                <h2 style={{ fontSize: "2rem", fontWeight: 500, margin: "16px 0 8px" }}>{score} <span style={{ fontSize: "1.2rem", color: theme.textMuted }}>/ {total}</span></h2>
+                <p style={{ color: theme.green, fontSize: "0.8rem", fontWeight: 500 }}>↗ +12% <span style={{ color: theme.textMuted }}>to previous test</span></p>
+              </div>
+            </div>
 
-              <div style={{ ...G.card, padding: "24px" }}>
-                <h3 style={{ fontSize: "0.95rem", fontWeight: 700, marginBottom: "16px" }}>Subject-wise Accuracy</h3>
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={breakdown}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
-                    <XAxis dataKey="subject" tick={{ fill: "#64748B", fontSize: 11 }} axisLine={{ stroke: "rgba(255,255,255,0.1)" }} tickLine={false} />
-                    <YAxis tick={{ fill: "#64748B", fontSize: 11 }} axisLine={false} tickLine={false} domain={[0, 100]} />
-                    <Tooltip contentStyle={{ background: "#1A2336", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px", fontSize: "0.8rem" }} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
-                    <Bar dataKey="accuracy" radius={[8, 8, 0, 0]}>
-                      {breakdown.map((e, i) => (
-                        <Cell key={i} fill={e.accuracy >= 70 ? "#22C55E" : e.accuracy >= 50 ? "#F59E0B" : "#EF4444"} />
+            <div style={{ ...G.card, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ color: theme.textMuted, fontSize: "0.9rem" }}>Percentile</span>
+                <span style={{ color: theme.textMuted }}>🏆</span>
+              </div>
+              <div>
+                <h2 style={{ fontSize: "2rem", fontWeight: 500, margin: "16px 0 8px" }}>{percentile}%</h2>
+                <p style={{ color: theme.green, fontSize: "0.8rem", fontWeight: 500 }}>↗ Top {100 - percentile}% <span style={{ color: theme.textMuted }}>of students</span></p>
+              </div>
+            </div>
+
+            <div style={{ ...G.card, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ color: theme.textMuted, fontSize: "0.9rem" }}>Accuracy</span>
+                <span style={{ color: theme.textMuted }}>🎯</span>
+              </div>
+              <div>
+                <h2 style={{ fontSize: "2rem", fontWeight: 500, margin: "16px 0 8px" }}>{accuracy}%</h2>
+                <p style={{ color: accuracy >= 70 ? theme.green : theme.red, fontSize: "0.8rem", fontWeight: 500 }}>
+                  {accuracy >= 70 ? "↗" : "↘"} {accuracy}% <span style={{ color: theme.textMuted }}>overall accuracy</span>
+                </p>
+              </div>
+            </div>
+
+            <div style={{ ...G.card, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ color: theme.textMuted, fontSize: "0.9rem" }}>Avg Time/Q</span>
+                <span style={{ color: theme.textMuted }}>⏱️</span>
+              </div>
+              <div>
+                <h2 style={{ fontSize: "2rem", fontWeight: 500, margin: "16px 0 8px" }}>{pacePerQ}s</h2>
+                <p style={{ color: theme.textMuted, fontSize: "0.8rem" }}>Based on total time spent</p>
+              </div>
+            </div>
+
+          </div>
+
+          {/* TOP RIGHT: Bar Chart (Spans 7 cols) */}
+          <div style={{ ...G.card, gridColumn: "span 7", display: "flex", flexDirection: "column" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "24px" }}>
+              <span style={{ color: "white", fontSize: "0.95rem" }}>Subject Performance</span>
+              <span style={{ border: theme.border, padding: "4px 8px", borderRadius: "6px", fontSize: "0.8rem", cursor: "pointer" }}>→</span>
+            </div>
+            <div style={{ flex: 1, minHeight: "220px" }}>
+              {breakdown.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={breakdown} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                    <XAxis dataKey="subject" axisLine={false} tickLine={false} tick={{ fill: theme.textMuted, fontSize: 11 }} dy={10} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: theme.textMuted, fontSize: 11 }} />
+                    <Tooltip cursor={{ fill: "transparent" }} content={<CustomTooltip />} />
+                    <Bar dataKey="score" radius={[6, 6, 6, 6]} barSize={28}>
+                      {breakdown.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={index === highestScoreIdx ? theme.accentPurple : theme.barMuted} />
                       ))}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
-              </div>
+              ) : (
+                <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: theme.textMuted }}>No subject data</div>
+              )}
             </div>
-
-            {/* Radar */}
-            <div style={{ ...G.card, padding: "24px", marginBottom: "18px" }}>
-              <h3 style={{ fontSize: "0.95rem", fontWeight: 700, marginBottom: "16px" }}>Strength Map</h3>
-              <ResponsiveContainer width="100%" height={240}>
-                <RadarChart data={breakdown.map(s => ({ subject: s.subject, accuracy: s.accuracy }))}>
-                  <PolarGrid stroke="rgba(255,255,255,0.08)" />
-                  <PolarAngleAxis dataKey="subject" tick={{ fill: "#94A3B8", fontSize: 11 }} />
-                  <PolarRadiusAxis tick={{ fill: "#475569", fontSize: 9 }} domain={[0, 100]} />
-                  <Radar dataKey="accuracy" stroke="#F59E0B" fill="#F59E0B" fillOpacity={0.25} strokeWidth={2} />
-                </RadarChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Subject bars */}
-            <div style={{ ...G.card, padding: "24px", marginBottom: "24px" }}>
-              <h3 style={{ fontSize: "0.95rem", fontWeight: 700, marginBottom: "18px" }}>Subject Breakdown</h3>
-              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                {breakdown.map(s => (
-                  <div key={s.subject} style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-                    <span style={{ width: "90px", fontSize: "0.82rem", color: "#CBD5E1", fontWeight: 600, flexShrink: 0 }}>{s.subject}</span>
-                    <div style={{ flex: 1, height: "8px", background: "#1A2336", borderRadius: "4px", overflow: "hidden", display: "flex" }}>
-                      <div style={{ width: `${(s.correct / (s.correct + s.wrong + s.skipped || 1)) * 100}%`, background: "#22C55E" }} />
-                      <div style={{ width: `${(s.wrong   / (s.correct + s.wrong + s.skipped || 1)) * 100}%`, background: "#EF4444" }} />
-                    </div>
-                    <span style={{ fontSize: "0.78rem", fontFamily: "monospace", fontWeight: 700, width: "44px", textAlign: "right", color: s.accuracy >= 70 ? "#22C55E" : s.accuracy >= 50 ? "#F59E0B" : "#EF4444" }}>{s.accuracy}%</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </>
-        ) : (
-          <div style={{ ...G.card, padding: "40px", textAlign: "center", marginBottom: "24px" }}>
-            <p style={{ fontSize: "2rem", marginBottom: "12px" }}>📊</p>
-            <p style={{ color: "#64748B", fontSize: "0.875rem", marginBottom: "6px" }}>No detailed breakdown available for this attempt.</p>
-            <p style={{ color: "#475569", fontSize: "0.78rem" }}>This happens when a test auto-submits with no answers. Take a fresh test and answer at least a few questions!</p>
           </div>
-        )}
 
-        {/* ── Action Buttons (plain <a> — always clickable) ── */}
-        <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-          <a href="/mock-tests"
-            style={{ flex: 1, minWidth: "200px", textAlign: "center", padding: "16px", borderRadius: "12px", background: G.grad, color: "#080C14", fontWeight: 700, fontSize: "0.95rem", textDecoration: "none", cursor: "pointer", display: "block" }}>
-            Take Another Test →
-          </a>
-          <a href="/dashboard"
-            style={{ flex: 1, minWidth: "200px", textAlign: "center", padding: "16px", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.12)", color: "#CBD5E1", fontWeight: 600, fontSize: "0.95rem", textDecoration: "none", cursor: "pointer", display: "block" }}>
-            Back to Dashboard
-          </a>
+          {/* BOTTOM LEFT: Line Chart (Spans 7 cols) */}
+          <div style={{ ...G.card, gridColumn: "span 7", display: "flex", flexDirection: "column" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "24px" }}>
+              <span style={{ color: "white", fontSize: "0.95rem" }}>Attempt Distribution</span>
+              <span style={{ border: theme.border, padding: "4px 8px", borderRadius: "6px", fontSize: "0.8rem", cursor: "pointer" }}>→</span>
+            </div>
+            
+            {/* Custom Legend for Line Chart */}
+            <div style={{ display: "flex", gap: "16px", marginBottom: "16px", fontSize: "0.8rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", color: theme.textMuted }}><span style={{ color: theme.accentPurple }}>●</span> Correct</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", color: theme.textMuted }}><span style={{ color: theme.accentPink }}>●</span> Wrong</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", color: theme.textMuted }}><span style={{ color: theme.accentYellow }}>●</span> Skipped</div>
+            </div>
+
+            <div style={{ flex: 1, minHeight: "220px" }}>
+              {breakdown.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={breakdown} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                    <XAxis dataKey="subject" axisLine={false} tickLine={false} tick={{ fill: theme.textMuted, fontSize: 11 }} dy={10} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: theme.textMuted, fontSize: 11 }} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Line type="monotone" name="Correct" dataKey="correct" stroke={theme.accentPurple} strokeWidth={3} dot={false} activeDot={{ r: 6, fill: theme.bg, stroke: theme.accentPurple, strokeWidth: 2 }} />
+                    <Line type="monotone" name="Wrong" dataKey="wrong" stroke={theme.accentPink} strokeWidth={3} dot={false} activeDot={{ r: 6, fill: theme.bg, stroke: theme.accentPink, strokeWidth: 2 }} />
+                    <Line type="monotone" name="Skipped" dataKey="skipped" stroke={theme.accentYellow} strokeWidth={3} dot={false} activeDot={{ r: 6, fill: theme.bg, stroke: theme.accentYellow, strokeWidth: 2 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: theme.textMuted }}>No data</div>
+              )}
+            </div>
+          </div>
+
+          {/* BOTTOM RIGHT: Donut Chart (Spans 5 cols) */}
+          <div style={{ ...G.card, gridColumn: "span 5", display: "flex", flexDirection: "column" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+              <span style={{ color: "white", fontSize: "0.95rem" }}>Accuracy Breakdown</span>
+              <span style={{ border: theme.border, padding: "4px 8px", borderRadius: "6px", fontSize: "0.8rem", cursor: "pointer" }}>→</span>
+            </div>
+            
+            <div style={{ display: "flex", alignItems: "center", flex: 1, position: "relative" }}>
+              
+              {/* Left Legend (Percentages) */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px", flex: 1 }}>
+                <div>
+                  <p style={{ color: "white", fontSize: "0.9rem", fontWeight: 600 }}>{accuracy}%</p>
+                  <p style={{ color: theme.textMuted, fontSize: "0.75rem" }}>Accuracy Rate</p>
+                </div>
+                <div>
+                  <p style={{ color: "white", fontSize: "0.9rem", fontWeight: 600 }}>{totalQuestions > 0 ? Math.round(((wrong + skipped)/totalQuestions)*100) : 0}%</p>
+                  <p style={{ color: theme.textMuted, fontSize: "0.75rem" }}>Error/Skip Rate</p>
+                </div>
+              </div>
+
+              {/* Chart */}
+              <div style={{ width: "200px", height: "200px", position: "relative" }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={65} outerRadius={85} paddingAngle={2} dataKey="value" stroke="none">
+                      {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                    </Pie>
+                    <Tooltip content={<CustomTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+                {/* Center Text */}
+                <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", textAlign: "center" }}>
+                  <p style={{ color: "white", fontSize: "1.4rem", fontWeight: 600 }}>{totalQuestions}</p>
+                  <p style={{ color: theme.textMuted, fontSize: "0.7rem" }}>Total Q's</p>
+                </div>
+              </div>
+
+              {/* Right Legend (Absolute values) */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px", flex: 1, alignItems: "flex-end", textAlign: "right" }}>
+                <div>
+                  <p style={{ color: theme.textMuted, fontSize: "0.75rem" }}><span style={{ color: theme.accentPurple }}>●</span> Correct</p>
+                  <p style={{ color: "white", fontSize: "0.9rem", fontWeight: 600 }}>{correct}</p>
+                </div>
+                <div>
+                  <p style={{ color: theme.textMuted, fontSize: "0.75rem" }}><span style={{ color: theme.accentPink }}>●</span> Wrong</p>
+                  <p style={{ color: "white", fontSize: "0.9rem", fontWeight: 600 }}>{wrong}</p>
+                </div>
+                <div>
+                  <p style={{ color: theme.textMuted, fontSize: "0.75rem" }}><span style={{ color: theme.accentYellow }}>●</span> Skipped</p>
+                  <p style={{ color: "white", fontSize: "0.9rem", fontWeight: 600 }}>{skipped}</p>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
         </div>
       </div>
-
-      <style>{`@media(max-width:768px){div[style*="1fr 1fr"]{grid-template-columns:1fr!important}}`}</style>
+      
+      {/* ── Responsive CSS Grid ── */}
+      <style>{`
+        @media(max-width: 1200px) {
+          div[style*="grid-template-columns: repeat(12, 1fr)"] > div {
+            grid-column: span 12 !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }
 
 export default function ResultPage() {
   return (
-    <Suspense fallback={<div style={{ minHeight:"100vh", background:"#080C14", display:"flex", alignItems:"center", justifyContent:"center" }}><p style={{ color:"#64748B" }}>Loading result...</p></div>}>
+    <Suspense fallback={<div style={{ minHeight: "100vh", background: theme.bg, color: theme.textMuted, display: "flex", alignItems: "center", justifyContent: "center" }}>Loading Result Engine...</div>}>
       <ResultContent />
     </Suspense>
   );

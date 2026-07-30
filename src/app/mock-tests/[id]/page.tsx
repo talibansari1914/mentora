@@ -115,6 +115,13 @@ export default function TestPage() {
   const [timeLeft, setTimeLeft] = useState(meta.duration * 60);
   const [confirm, setConfirm]   = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  
+  // Mounted state for hydration fix
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const submit = useCallback(() => {
     if (submitted) return;
@@ -204,6 +211,18 @@ export default function TestPage() {
   const q = questions[current];
   const timeUrgent = timeLeft < 60;
   const answeredCount = Object.keys(answers).length;
+
+  if (!isMounted) {
+    return (
+      <div style={{
+        minHeight: "100vh", background: "#080C14", display: "flex",
+        alignItems: "center", justifyContent: "center", color: "#94A3B8",
+        fontFamily: "'DM Sans',sans-serif", fontSize: "1.1rem"
+      }}>
+        ⏳ Loading test...
+      </div>
+    );
+  }
 
   if (!q) return null;
 

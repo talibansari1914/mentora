@@ -1,0 +1,99 @@
+Folder PATH listing for volume OS
+Volume serial number is 00000220 EC8E:5997
+C:\USERS\TALIB\DOWNLOADS\MENTORA\SRC
++---app
+¦   ¦   favicon.ico
+¦   ¦   globals.css
+¦   ¦   layout.tsx
+¦   ¦   page.tsx
+¦   ¦   
+¦   +---analytics
+¦   ¦       page.tsx
+¦   ¦       
+¦   +---dashboard
+¦   ¦       error.tsx
+¦   ¦       loading.tsx
+¦   ¦       page.tsx
+¦   ¦       
+¦   +---library
+¦   ¦       page.tsx
+¦   ¦       
+¦   +---login
+¦   ¦       page.tsx
+¦   ¦       
+¦   +---mock-tests
+¦   ¦   ¦   page.tsx
+¦   ¦   ¦   
+¦   ¦   +---result
+¦   ¦   ¦       page.tsx
+¦   ¦   ¦       
+¦   ¦   +---[id]
+¦   ¦           page.tsx
+¦   ¦           
+¦   +---my-notes
+¦   ¦       page.tsx
+¦   ¦       
+¦   +---planner
+¦   ¦       page.tsx
+¦   ¦       
+¦   +---pyqs
+¦   ¦       page.tsx
+¦   ¦       
+¦   +---signup
+¦           page.tsx
+¦           
++---assets
+¦   +---icons
+¦   +---images
+¦   +---logos
++---components
+¦   +---common
+¦   ¦       Navbar.tsx
+¦   ¦       
+¦   +---dashboard
+¦   ¦       ContinueReading.tsx
+¦   ¦       FocusAreas.tsx
+¦   ¦       Header.tsx
+¦   ¦       RankCard.tsx
+¦   ¦       RecentTests.tsx
+¦   ¦       Sidebar.tsx
+¦   ¦       StatsCards.tsx
+¦   ¦       StudyStreak.tsx
+¦   ¦       TodayPlan.tsx
+¦   ¦       Welcome.tsx
+¦   ¦       
+¦   +---landing
+¦   +---shared
++---constants
+¦       colors.ts
+¦       config.ts
+¦       navigation.ts
+¦       
++---data
+¦       books.ts
+¦       dashboardData.ts
+¦       rank.ts
+¦       tasks.ts
+¦       weakTopics.ts
+¦       
++---hooks
+¦       useDashboard.ts
+¦       
++---lib
+¦       questionBank.ts
+¦       supabase.ts
+¦       
++---services
+¦       authService.ts
+¦       dashboardService.ts
+¦       testService.ts
+¦       
++---styles
+¦       dashboard.ts
+¦       
++---types
+        book.ts
+        dashboard.ts
+        test.ts
+        user.ts
+        

@@ -21,7 +21,7 @@ export default function Navbar() {
       borderBottom: scrolled ? "1px solid rgba(255,255,255,0.06)" : "none",
       transition: "all 0.3s ease",
     }}>
-      <div style={{maxWidth: "1200px", margin: "0 auto", padding: "0 48px", display: "flex", alignItems: "center", justifyContent: "space-between"}}>
+      <div className="navbar-container" style={{maxWidth: "1200px", margin: "0 auto", padding: "0 48px", display: "flex", alignItems: "center", justifyContent: "space-between"}}>
 
         {/* Logo */}
         <Link href="/" style={{display: "flex", alignItems: "center", gap: "10px", textDecoration: "none"}}>
@@ -86,6 +86,10 @@ export default function Navbar() {
         @media (max-width: 768px) {
           .hide-mobile { display: none !important; }
           .show-mobile { display: block !important; }
+          .navbar-container { padding: 0 24px !important; }
+        }
+        @media (max-width: 600px) {
+          .navbar-container { padding: 0 18px !important; }
         }
       `}</style>
     </nav>
