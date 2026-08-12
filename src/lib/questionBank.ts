@@ -18,6 +18,12 @@ export type TestMeta = {
   exam: "jee" | "neet" | "upsc" | "ssc";
   duration: number; // minutes
   negMark: boolean;
+  // When set, getQuestionsForTest only pulls questions tagged with this
+  // subject instead of the exam's full mixed pool — so a test titled
+  // "Mechanics — Topic Test" actually gives Physics questions instead of
+  // a random mix of Physics/Chemistry/Maths, and doesn't fully overlap
+  // with unrelated topic tests from the same exam.
+  topicSubject?: string;
 };
 
 // ───── JEE Questions ─────
@@ -86,19 +92,18 @@ export const QUESTION_BANKS: Record<string, Question[]> = {
 // Test metadata keyed by test id (from the hub page)
 export const TEST_LOOKUP: Record<string, TestMeta> = {
   "1":  { id: "1",  title: "JEE Main Full Mock Test #14",        exam: "jee",  duration: 30, negMark: true },
-  "2":  { id: "2",  title: "Mechanics — Topic Test",              exam: "jee",  duration: 20, negMark: true },
-  "3":  { id: "3",  title: "Organic Chemistry — Chapter 8",       exam: "jee",  duration: 20, negMark: true },
-  "4":  { id: "4",  title: "NEET Biology Full Mock #9",           exam: "neet", duration: 30, negMark: true },
-  "5":  { id: "5",  title: "Human Physiology — Topic Test",       exam: "neet", duration: 15, negMark: true },
+  "2":  { id: "2",  title: "Mechanics — Topic Test",              exam: "jee",  duration: 20, negMark: true, topicSubject: "Physics" },
+  "3":  { id: "3",  title: "Organic Chemistry — Chapter 8",       exam: "jee",  duration: 20, negMark: true, topicSubject: "Chemistry" },
+  "4":  { id: "4",  title: "NEET Biology Full Mock #9",           exam: "neet", duration: 30, negMark: true, topicSubject: "Biology" },
+  "5":  { id: "5",  title: "Human Physiology — Topic Test",       exam: "neet", duration: 15, negMark: true, topicSubject: "Biology" },
   "6":  { id: "6",  title: "NEET PYQ 2024 — Full Paper",          exam: "neet", duration: 30, negMark: true },
   "7":  { id: "7",  title: "UPSC Prelims Full Mock #21",          exam: "upsc", duration: 30, negMark: true },
-  "8":  { id: "8",  title: "Indian Polity — Topic Test",          exam: "upsc", duration: 15, negMark: true },
-  "9":  { id: "9",  title: "Modern History — Chapter Test",       exam: "upsc", duration: 15, negMark: true },
+  "8":  { id: "8",  title: "Indian Polity — Topic Test",          exam: "upsc", duration: 15, negMark: true, topicSubject: "Polity" },
+  "9":  { id: "9",  title: "Modern History — Chapter Test",       exam: "upsc", duration: 15, negMark: true, topicSubject: "History" },
   "10": { id: "10", title: "UPSC Prelims PYQ 2023",               exam: "upsc", duration: 30, negMark: true },
-  "11": { id: "11", title: "Daily Practice — Algebra",            exam: "jee",  duration: 10, negMark: false },
-  "12": { id: "12", title: "Daily Practice — Cell Biology",       exam: "neet", duration: 10, negMark: false },
-  "13": { id: "13", title: "PW Test Series — JEE Mock #5",        exam: "jee",  duration: 30, negMark: true },
-  "14": { id: "14", title: "Resonance — Calculus Special",        exam: "jee",  duration: 20, negMark: true },
+  "11": { id: "11", title: "Daily Practice — Algebra",            exam: "jee",  duration: 10, negMark: false, topicSubject: "Maths" },
+  "12": { id: "12", title: "Daily Practice — Cell Biology",       exam: "neet", duration: 10, negMark: false, topicSubject: "Biology" },
+  "14": { id: "14", title: "Calculus Special — Topic Test",       exam: "jee",  duration: 20, negMark: true, topicSubject: "Maths" },
   "15": { id: "15", title: "SSC CGL Full Mock #7",                exam: "ssc",  duration: 20, negMark: true },
 };
 
@@ -116,7 +121,12 @@ export function shuffleArray<T>(arr: T[]): T[] {
 export function getQuestionsForTest(testId: string): { meta: TestMeta; questions: Question[] } {
   const meta = TEST_LOOKUP[testId] || TEST_LOOKUP["1"];
   const bank = QUESTION_BANKS[meta.exam] || JEE_QUESTIONS;
-  return { meta, questions: shuffleArray(bank) };
+  const scoped = meta.topicSubject
+    ? bank.filter((q) => q.subject === meta.topicSubject)
+    : bank;
+  // Fallback: if a topic somehow has zero matching questions, don't return
+  // an empty test — show the full pool rather than a blank screen.
+  return { meta, questions: shuffleArray(scoped.length > 0 ? scoped : bank) };
 }
 
 // ══════════════════════════════════════════

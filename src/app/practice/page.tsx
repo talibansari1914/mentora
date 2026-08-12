@@ -1,22 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { testService } from "@/services/testService";
 import { settingsService } from "@/services/settingsService";
+import { gradAmber, gradTextAmber } from "@/lib/theme";
+import BackToDashboardLink from "@/components/common/BackToDashboardLink";
+import { getErrorMessage } from "@/lib/errors";
 
-const G = {
-  grad: "linear-gradient(135deg,#F59E0B,#FBBF24)",
-  gradText: {
-    background: "linear-gradient(135deg,#F59E0B,#FBBF24)",
-    WebkitBackgroundClip: "text",
-    WebkitTextFillColor: "transparent",
-  },
-  card: {
-    background: "#0B1220",
-    border: "1px solid rgba(255,255,255,.06)",
-    borderRadius: "16px",
-  },
-};
+const G = { grad: gradAmber, gradText: gradTextAmber };
 
 const EXAMS = [
   { value: "upsc", label: "UPSC" },
@@ -57,10 +49,40 @@ function improvementMessage(accuracy: number) {
   return "The weak topics in this subject need to be studied again — use Notes Generator to clear the concepts first, then come back to practice.";
 }
 
-export default function DailyPracticePage() {
+// Static theme-token style map — driven entirely by the shared --theme-* CSS
+// variables set on <html data-theme="dark|light">, so this page always mirrors
+// the dashboard toggle exactly with zero extra JS/state.
+const themeStyles = {
+  bg: "var(--theme-bg-main)",
+  color: "var(--theme-text-main)",
+  subText: "var(--theme-text-sub)",
+  mutedText: "var(--theme-text-sub)",
+  cardBg: "var(--theme-card-bg)",
+  cardBorder: "1px solid var(--theme-border)",
+  selectBg: "var(--theme-card-bg)",
+  selectColor: "var(--theme-text-main)",
+  selectBorder: "1px solid var(--theme-border)",
+  optionBorder: "var(--theme-border)",
+  optionBgSelected: "var(--theme-accent-soft)",
+};
+
+function DailyPracticeContent() {
+  // Pre-fill from a "Practice Now" link on the dashboard's Focus Areas
+  // widget (?exam=upsc&subject=Polity) - falls back to the normal
+  // upsc/first-subject defaults when these aren't present, so this page
+  // behaves exactly as before when opened directly from the sidebar.
+  const searchParams = useSearchParams();
+  const examParam = searchParams.get("exam")?.toLowerCase() ?? null;
+  const subjectParam = searchParams.get("subject") ?? null;
+  const initialExam = examParam && SUBJECTS_BY_EXAM[examParam] ? examParam : "upsc";
+  const initialSubject =
+    (subjectParam &&
+      SUBJECTS_BY_EXAM[initialExam]?.find((s) => s.toLowerCase() === subjectParam.toLowerCase())) ||
+    SUBJECTS_BY_EXAM[initialExam][0];
+
   const [stage, setStage] = useState<Stage>("setup");
-  const [exam, setExam] = useState("upsc");
-  const [subject, setSubject] = useState(SUBJECTS_BY_EXAM["upsc"][0]);
+  const [exam, setExam] = useState(initialExam);
+  const [subject, setSubject] = useState(initialSubject);
   const [count, setCount] = useState(5);
 
   const [questions, setQuestions] = useState<PracticeQuestion[]>([]);
@@ -70,35 +92,48 @@ export default function DailyPracticePage() {
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Learning Preferences from Settings — configured centrally so Daily
-  // Practice behaves consistently with what the student set up there.
+  // Learning Preferences from Settings
   const [difficulty, setDifficulty] = useState("Medium");
   const [adaptiveLearning, setAdaptiveLearning] = useState(false);
   const [weakTopics, setWeakTopics] = useState<string[]>([]);
+  // Content Language from Settings → Language & Region (applies here as documented on that page)
+  const [contentLanguage, setContentLanguage] = useState("english");
 
   useEffect(() => {
+    let cancelled = false;
     settingsService
       .getSettings()
       .then((settings) => {
+        if (cancelled) return;
         setDifficulty(settings.learning_preferences.difficultyLevel);
         setAdaptiveLearning(settings.learning_preferences.adaptiveLearning);
+        setContentLanguage(settings.language_region.contentLanguage.toLowerCase());
       })
       .catch(() => {
-        // Not fatal — practice still works with the defaults above.
+        // Not fatal — practice still works with defaults.
       });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  // When Adaptive Learning is on, pull the student's weak subjects so the
-  // question generator can lean extra questions toward them.
   useEffect(() => {
     if (!adaptiveLearning) {
       setWeakTopics([]);
       return;
     }
+    let cancelled = false;
     testService
       .getWeakSubjects(exam, 5)
-      .then((subjects) => setWeakTopics(subjects.map((s) => s.subject)))
-      .catch(() => setWeakTopics([]));
+      .then((subjects) => {
+        if (!cancelled) setWeakTopics(subjects.map((s) => s.subject));
+      })
+      .catch(() => {
+        if (!cancelled) setWeakTopics([]);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [adaptiveLearning, exam]);
 
   const subjectOptions = useMemo(() => SUBJECTS_BY_EXAM[exam] ?? [], [exam]);
@@ -122,6 +157,7 @@ export default function DailyPracticePage() {
           count,
           difficulty,
           emphasizeTopics: weakTopics.length > 0 ? weakTopics.join(", ") : undefined,
+          language: contentLanguage,
         }),
       });
 
@@ -134,8 +170,8 @@ export default function DailyPracticePage() {
       setQuestions(data.questions);
       setAnswers(new Array(data.questions.length).fill(-1));
       setStage("quiz");
-    } catch (err: any) {
-      setError(err.message ?? "Something went wrong.");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Something went wrong."));
     } finally {
       setLoading(false);
     }
@@ -173,11 +209,11 @@ export default function DailyPracticePage() {
     const total = questions.length;
     const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
 
-    const weakTopics = Object.entries(topicWrongCount)
+    const weakTopicsSorted = Object.entries(topicWrongCount)
       .sort((a, b) => b[1] - a[1])
       .map(([topic, count]) => ({ topic, count }));
 
-    return { correct, wrong, skipped, total, accuracy, weakTopics };
+    return { correct, wrong, skipped, total, accuracy, weakTopics: weakTopicsSorted };
   }, [questions, answers]);
 
   async function handleSubmit() {
@@ -206,7 +242,7 @@ export default function DailyPracticePage() {
           },
         },
       });
-    } catch (err: any) {
+    } catch {
       setSaveError(
         "Could not save your result (please check you're logged in). Your score is shown below."
       );
@@ -221,20 +257,30 @@ export default function DailyPracticePage() {
     setSaveError(null);
   }
 
+  const cardStyle: React.CSSProperties = {
+    background: themeStyles.cardBg,
+    border: themeStyles.cardBorder,
+    borderRadius: "16px",
+    transition: "background 0.3s, border 0.3s",
+    boxSizing: "border-box",
+  };
+
   const selectStyle: React.CSSProperties = {
     width: "100%",
-    background: "#0F172A",
-    border: "1px solid rgba(255,255,255,.08)",
+    background: themeStyles.selectBg,
+    border: themeStyles.selectBorder,
     borderRadius: "10px",
     padding: "11px 14px",
-    color: "white",
+    color: themeStyles.selectColor,
     fontSize: ".9rem",
     outline: "none",
+    transition: "background 0.3s, color 0.3s, border 0.3s",
+    boxSizing: "border-box",
   };
 
   const labelStyle: React.CSSProperties = {
     display: "block",
-    color: "#94A3B8",
+    color: themeStyles.subText,
     fontSize: ".78rem",
     fontWeight: 600,
     marginBottom: "6px",
@@ -246,34 +292,37 @@ export default function DailyPracticePage() {
     <div
       style={{
         minHeight: "100vh",
-        background: "#080C14",
-        color: "white",
+        background: themeStyles.bg,
+        color: themeStyles.color,
         fontFamily: "'DM Sans',sans-serif",
-        padding: "32px",
+        padding: "clamp(16px, 4vw, 32px)",
+        transition: "background 0.3s, color 0.3s",
+        boxSizing: "border-box",
       }}
     >
       <div style={{ maxWidth: "800px", margin: "0 auto" }}>
         <header style={{ marginBottom: "24px" }}>
-          <h1 style={{ fontSize: "2rem", fontWeight: 800, marginBottom: "8px" }}>
+          <BackToDashboardLink />
+          <h1 style={{ fontSize: "clamp(1.6rem, 3vw, 2rem)", fontWeight: 800, marginBottom: "8px", color: themeStyles.color }}>
             Daily <span style={G.gradText}>Practice</span>
           </h1>
-          <p style={{ color: "#94A3B8", fontSize: ".95rem" }}>
+          <p style={{ color: themeStyles.subText, fontSize: ".95rem" }}>
             Choose an exam and subject, and practice new questions every day.
           </p>
-          <p style={{ color: "#475569", fontSize: ".78rem", marginTop: "8px" }}>
-            Difficulty: <strong style={{ color: "#94A3B8" }}>{difficulty}</strong>
+          <p style={{ color: themeStyles.mutedText, fontSize: ".78rem", marginTop: "8px" }}>
+            Difficulty: <strong style={{ color: themeStyles.subText }}>{difficulty}</strong>
             {adaptiveLearning && weakTopics.length > 0 && (
               <> · Adaptive Learning is <strong style={{ color: "#22C55E" }}>ON</strong> (leaning into: {weakTopics.join(", ")})</>
             )}
             {" · "}
-            <a href="/settings" style={{ color: "#F59E0B", textDecoration: "none" }}>
+            <a href="/settings" style={{ color: "var(--theme-accent)", textDecoration: "none" }}>
               Change in Settings
             </a>
           </p>
         </header>
 
         {stage === "setup" && (
-          <div style={{ ...G.card, padding: "22px" }}>
+          <div style={{ ...cardStyle, padding: "clamp(16px, 3vw, 22px)" }}>
             <div
               style={{
                 display: "grid",
@@ -290,7 +339,7 @@ export default function DailyPracticePage() {
                   style={selectStyle}
                 >
                   {EXAMS.map((e) => (
-                    <option key={e.value} value={e.value}>
+                    <option key={e.value} value={e.value} style={{ background: themeStyles.selectBg, color: themeStyles.selectColor }}>
                       {e.label}
                     </option>
                   ))}
@@ -305,7 +354,7 @@ export default function DailyPracticePage() {
                   style={selectStyle}
                 >
                   {subjectOptions.map((s) => (
-                    <option key={s} value={s}>
+                    <option key={s} value={s} style={{ background: themeStyles.selectBg, color: themeStyles.selectColor }}>
                       {s}
                     </option>
                   ))}
@@ -326,11 +375,12 @@ export default function DailyPracticePage() {
                       border:
                         count === c
                           ? "1px solid transparent"
-                          : "1px solid rgba(255,255,255,.1)",
-                      background: count === c ? G.grad : "transparent",
-                      color: count === c ? "#111827" : "#94A3B8",
+                          : themeStyles.cardBorder,
+                      background: count === c ? G.grad : "var(--theme-hover-bg)",
+                      color: count === c ? "var(--theme-accent-text)" : themeStyles.subText,
                       fontWeight: 700,
                       cursor: "pointer",
+                      flex: "1 1 auto",
                     }}
                   >
                     {c}
@@ -346,7 +396,7 @@ export default function DailyPracticePage() {
                 width: "100%",
                 background: G.grad,
                 border: "none",
-                color: "#111827",
+                color: "var(--theme-accent-text)",
                 padding: "13px",
                 borderRadius: "10px",
                 cursor: loading ? "not-allowed" : "pointer",
@@ -374,9 +424,11 @@ export default function DailyPracticePage() {
                 justifyContent: "space-between",
                 alignItems: "center",
                 marginBottom: "16px",
+                flexWrap: "wrap",
+                gap: "8px",
               }}
             >
-              <span style={{ color: "#94A3B8", fontSize: ".85rem" }}>
+              <span style={{ color: themeStyles.subText, fontSize: ".85rem" }}>
                 {answers.filter((a) => a !== -1).length} / {questions.length}{" "}
                 answered
               </span>
@@ -384,12 +436,13 @@ export default function DailyPracticePage() {
 
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               {questions.map((q, qIndex) => (
-                <div key={qIndex} style={{ ...G.card, padding: "18px" }}>
+                <div key={qIndex} style={{ ...cardStyle, padding: "clamp(14px, 3vw, 18px)" }}>
                   <p
                     style={{
                       fontWeight: 600,
                       fontSize: ".95rem",
                       marginBottom: "12px",
+                      color: themeStyles.color,
                     }}
                   >
                     {qIndex + 1}. {q.question}
@@ -408,13 +461,15 @@ export default function DailyPracticePage() {
                             padding: "10px 12px",
                             borderRadius: "10px",
                             border: selected
-                              ? "1px solid #F59E0B"
-                              : "1px solid rgba(255,255,255,.08)",
+                              ? "1px solid var(--theme-accent)"
+                              : `1px solid ${themeStyles.optionBorder}`,
                             background: selected
-                              ? "rgba(245,158,11,.08)"
+                              ? themeStyles.optionBgSelected
                               : "transparent",
                             cursor: "pointer",
                             fontSize: ".88rem",
+                            color: themeStyles.color,
+                            transition: "background 0.2s, border 0.2s",
                           }}
                         >
                           <input
@@ -423,7 +478,7 @@ export default function DailyPracticePage() {
                             checked={selected}
                             onChange={() => selectAnswer(qIndex, optIndex)}
                           />
-                          {opt}
+                          <span>{opt}</span>
                         </label>
                       );
                     })}
@@ -438,7 +493,7 @@ export default function DailyPracticePage() {
                 width: "100%",
                 background: G.grad,
                 border: "none",
-                color: "#111827",
+                color: "var(--theme-accent-text)",
                 padding: "14px",
                 borderRadius: "10px",
                 cursor: "pointer",
@@ -456,7 +511,7 @@ export default function DailyPracticePage() {
           <div>
             <div
               style={{
-                ...G.card,
+                ...cardStyle,
                 padding: "22px",
                 marginBottom: "20px",
                 textAlign: "center",
@@ -472,7 +527,7 @@ export default function DailyPracticePage() {
               >
                 {scoring.accuracy}%
               </div>
-              <p style={{ color: "#94A3B8", marginBottom: "16px" }}>Accuracy</p>
+              <p style={{ color: themeStyles.subText, marginBottom: "16px" }}>Accuracy</p>
 
               <div
                 style={{
@@ -486,36 +541,36 @@ export default function DailyPracticePage() {
                   <div style={{ fontSize: "1.4rem", fontWeight: 800, color: "#22C55E" }}>
                     {scoring.correct}
                   </div>
-                  <div style={{ color: "#64748B", fontSize: ".78rem" }}>Correct</div>
+                  <div style={{ color: themeStyles.subText, fontSize: ".78rem" }}>Correct</div>
                 </div>
                 <div>
                   <div style={{ fontSize: "1.4rem", fontWeight: 800, color: "#EF4444" }}>
                     {scoring.wrong}
                   </div>
-                  <div style={{ color: "#64748B", fontSize: ".78rem" }}>Wrong</div>
+                  <div style={{ color: themeStyles.subText, fontSize: ".78rem" }}>Wrong</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: "1.4rem", fontWeight: 800, color: "#94A3B8" }}>
+                  <div style={{ fontSize: "1.4rem", fontWeight: 800, color: themeStyles.subText }}>
                     {scoring.skipped}
                   </div>
-                  <div style={{ color: "#64748B", fontSize: ".78rem" }}>Skipped</div>
+                  <div style={{ color: themeStyles.subText, fontSize: ".78rem" }}>Skipped</div>
                 </div>
               </div>
 
-              <p style={{ color: "#CBD5E1", fontSize: ".9rem", lineHeight: 1.6 }}>
+              <p style={{ color: themeStyles.subText, fontSize: ".9rem", lineHeight: 1.6 }}>
                 {improvementMessage(scoring.accuracy)}
               </p>
 
               {saveError && (
-                <p style={{ color: "#F59E0B", fontSize: ".8rem", marginTop: "10px" }}>
+                <p style={{ color: "var(--theme-accent)", fontSize: ".8rem", marginTop: "10px" }}>
                   {saveError}
                 </p>
               )}
             </div>
 
             {scoring.weakTopics.length > 0 && (
-              <div style={{ ...G.card, padding: "20px", marginBottom: "20px" }}>
-                <h3 style={{ fontWeight: 700, marginBottom: "12px" }}>
+              <div style={{ ...cardStyle, padding: "20px", marginBottom: "20px" }}>
+                <h3 style={{ fontWeight: 700, marginBottom: "12px", color: themeStyles.color }}>
                   Where You Need to Improve
                 </h3>
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -526,9 +581,11 @@ export default function DailyPracticePage() {
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
+                        flexWrap: "wrap",
+                        gap: "6px",
                       }}
                     >
-                      <span style={{ fontSize: ".88rem" }}>{topic}</span>
+                      <span style={{ fontSize: ".88rem", color: themeStyles.color }}>{topic}</span>
                       <span
                         style={{
                           fontSize: ".75rem",
@@ -545,8 +602,8 @@ export default function DailyPracticePage() {
             )}
 
             {scoring.wrong > 0 && (
-              <div style={{ ...G.card, padding: "20px", marginBottom: "20px" }}>
-                <h3 style={{ fontWeight: 700, marginBottom: "14px" }}>
+              <div style={{ ...cardStyle, padding: "20px", marginBottom: "20px" }}>
+                <h3 style={{ fontWeight: 700, marginBottom: "14px", color: themeStyles.color }}>
                   Wrong Answers — Review
                 </h3>
                 <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -558,11 +615,11 @@ export default function DailyPracticePage() {
                       <div
                         key={i}
                         style={{
-                          borderBottom: "1px solid rgba(255,255,255,.06)",
+                          borderBottom: themeStyles.cardBorder,
                           paddingBottom: "14px",
                         }}
                       >
-                        <p style={{ fontWeight: 600, fontSize: ".9rem", marginBottom: "8px" }}>
+                        <p style={{ fontWeight: 600, fontSize: ".9rem", marginBottom: "8px", color: themeStyles.color }}>
                           {i + 1}. {q.question}
                         </p>
                         <p style={{ color: "#EF4444", fontSize: ".85rem", marginBottom: "4px" }}>
@@ -571,7 +628,7 @@ export default function DailyPracticePage() {
                         <p style={{ color: "#22C55E", fontSize: ".85rem", marginBottom: "4px" }}>
                           Correct answer: {q.options[q.correctIndex]}
                         </p>
-                        <p style={{ color: "#94A3B8", fontSize: ".82rem" }}>
+                        <p style={{ color: themeStyles.subText, fontSize: ".82rem" }}>
                           {q.explanation}
                         </p>
                       </div>
@@ -586,8 +643,8 @@ export default function DailyPracticePage() {
               style={{
                 width: "100%",
                 background: "transparent",
-                border: "1px solid rgba(255,255,255,.1)",
-                color: "white",
+                border: themeStyles.cardBorder,
+                color: themeStyles.color,
                 padding: "13px",
                 borderRadius: "10px",
                 cursor: "pointer",
@@ -600,5 +657,27 @@ export default function DailyPracticePage() {
         )}
       </div>
     </div>
+  );
+}
+export default function DailyPracticePage() {
+  return (
+    <Suspense
+      fallback={
+        <div
+          style={{
+            minHeight: "100vh",
+            background: "var(--theme-bg-main)",
+            color: "var(--theme-text-sub)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          Loading...
+        </div>
+      }
+    >
+      <DailyPracticeContent />
+    </Suspense>
   );
 }

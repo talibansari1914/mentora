@@ -1,9 +1,42 @@
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase";
 import { authService } from "./authService";
-import { Mentor, MentorBooking, MentorReview, MentorApplication } from "@/types/mentor";
+import { Mentor, MentorBooking, MentorReview, MentorReviewWithReviewer, MentorApplication, MentorCategory, MentorType } from "@/types/mentor";
+import { createInFlightDeduper } from "@/lib/asyncCache";
+
+// Same cookie-aware singleton client as authService/middleware/server —
+// created explicitly here (instead of importing the old backward-compat
+// `supabase` export) so this file's session source is unambiguous.
+const supabase = createClient();
+
+// Deduping getUserId() so that if a page ever calls more than one of this
+// class's user-scoped methods at the same time via Promise.all, they share
+// a single auth check instead of each opening their own — see
+// src/lib/asyncCache.ts.
+const dedupeUserId = createInFlightDeduper<string>();
+
+// Raw Supabase row shape (snake_case) for the `mentors` table.
+interface MentorRow {
+  id: number;
+  name: string;
+  category: MentorCategory;
+  mentor_type: MentorType;
+  qualification: string;
+  experience_years: number;
+  expertise: string[] | null;
+  languages: string[] | null;
+  bio: string;
+  rating: number;
+  total_students: number;
+  verified: boolean;
+  response_time_hours: number;
+  session_charge: number;
+  city: string | null;
+  address: string | null;
+  avatar_icon: string;
+}
 
 // Converts a raw Supabase row (snake_case) into our Mentor type (camelCase).
-function mapMentorRow(row: any): Mentor {
+function mapMentorRow(row: MentorRow): Mentor {
   return {
     id: row.id,
     name: row.name,
@@ -27,13 +60,15 @@ function mapMentorRow(row: any): Mentor {
 
 class MentorService {
   private async getUserId() {
-    const user = await authService.getCurrentUser();
+    return dedupeUserId("user-id", async () => {
+      const user = await authService.getCurrentUser();
 
-    if (!user) {
-      throw new Error("User not authenticated.");
-    }
+      if (!user) {
+        throw new Error("User not authenticated.");
+      }
 
-    return user.id;
+      return user.id;
+    });
   }
 
   // ==========================
@@ -85,7 +120,7 @@ class MentorService {
 
     if (error) throw error;
 
-    return (data ?? []).map((row: any) => row.booking_time);
+    return (data ?? []).map((row: { booking_time: string }) => row.booking_time);
   }
 
   async createBooking(booking: {
@@ -111,10 +146,19 @@ class MentorService {
   }
 
   async cancelBooking(bookingId: string): Promise<void> {
+    // Defense-in-depth: scope this update to the current user's own bookings.
+    // Without this .eq("user_id", ...), a logged-in user who somehow learns
+    // another user's booking ID (e.g. a leaked link, a predictable ID) could
+    // cancel someone else's session, with only the Supabase RLS policy
+    // standing between them and that — this makes the intent explicit in
+    // the query itself too, not just in the database policy.
+    const userId = await this.getUserId();
+
     const { error } = await supabase
       .from("mentor_bookings")
       .update({ status: "cancelled" })
-      .eq("id", bookingId);
+      .eq("id", bookingId)
+      .eq("user_id", userId);
 
     if (error) throw error;
   }
@@ -123,16 +167,20 @@ class MentorService {
   // REVIEWS
   // ==========================
 
-  async getReviewsForMentor(mentorId: number): Promise<MentorReview[]> {
-    const { data, error } = await supabase
-      .from("mentor_reviews")
-      .select("*")
-      .eq("mentor_id", mentorId)
-      .order("created_at", { ascending: false });
+  // Uses get_mentor_reviews_with_names (a security-definer RPC — see the
+  // migration of the same name) instead of a plain select, because a
+  // direct client-side join to `profiles` for the reviewer's name would
+  // be blocked by profiles' RLS policy (a user can only read their own
+  // profile row). The RPC returns just the reviewer's display name,
+  // nothing else from their profile.
+  async getReviewsForMentor(mentorId: number): Promise<MentorReviewWithReviewer[]> {
+    const { data, error } = await supabase.rpc("get_mentor_reviews_with_names", {
+      p_mentor_id: mentorId,
+    });
 
     if (error) throw error;
 
-    return (data ?? []) as MentorReview[];
+    return (data ?? []) as MentorReviewWithReviewer[];
   }
 
   async submitReview(review: {
@@ -142,6 +190,30 @@ class MentorService {
     review_text?: string;
   }): Promise<MentorReview> {
     const userId = await this.getUserId();
+
+    // Defense-in-depth: this is a client-side call, so a technically savvy
+    // user could otherwise invoke submitReview() directly (e.g. via browser
+    // devtools) with an arbitrary mentor_id/booking_id and post a review for
+    // a mentor they never actually booked a session with. Verify the booking
+    // belongs to this user and was completed before allowing the review.
+    if (review.booking_id) {
+      const { data: bookingRow, error: bookingError } = await supabase
+        .from("mentor_bookings")
+        .select("id, user_id, mentor_id, status")
+        .eq("id", review.booking_id)
+        .maybeSingle();
+
+      if (bookingError) throw bookingError;
+      if (!bookingRow || bookingRow.user_id !== userId) {
+        throw new Error("You can only review sessions you've booked.");
+      }
+      if (bookingRow.mentor_id !== review.mentor_id) {
+        throw new Error("This booking doesn't match the selected mentor.");
+      }
+      if (bookingRow.status !== "completed") {
+        throw new Error("You can only review a session after it's completed.");
+      }
+    }
 
     const { data, error } = await supabase
       .from("mentor_reviews")

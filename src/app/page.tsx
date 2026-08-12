@@ -2,6 +2,28 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Navbar from "@/components/common/Navbar";
+import { Mail } from "lucide-react";
+
+// lucide-react intentionally does not include brand/logo icons (GitHub,
+// Instagram, Twitter, etc. — trademark reasons), so these two are small
+// local inline-SVG icons instead, sized/styled to match lucide's icons.
+function GithubIcon({ size = 15 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 .5C5.73.5.98 5.24.98 11.52c0 5.02 3.26 9.28 7.78 10.78.57.1.78-.25.78-.55 0-.27-.01-1.16-.02-2.11-3.17.69-3.84-1.35-3.84-1.35-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.75 1.18 1.75 1.18 1.02 1.75 2.68 1.24 3.33.95.1-.74.4-1.24.72-1.53-2.53-.29-5.19-1.27-5.19-5.63 0-1.24.44-2.26 1.17-3.05-.12-.29-.51-1.45.11-3.02 0 0 .96-.31 3.14 1.16a10.9 10.9 0 0 1 5.72 0c2.18-1.47 3.14-1.16 3.14-1.16.62 1.57.23 2.73.11 3.02.73.79 1.17 1.81 1.17 3.05 0 4.37-2.67 5.34-5.21 5.62.41.36.77 1.06.77 2.14 0 1.55-.01 2.79-.01 3.17 0 .3.2.66.79.55A11.03 11.03 0 0 0 23.02 11.52C23.02 5.24 18.27.5 12 .5Z" />
+    </svg>
+  );
+}
+
+function InstagramIcon({ size = 15 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37Z" />
+      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+    </svg>
+  );
+}
 
 function useCounter(target: number, duration = 1800) {
   const [count, setCount] = useState(0);
@@ -74,11 +96,54 @@ const PLANS = [
   { tier: "Elite", price: "₹599", per: "/ month", desc: "For students who want an edge.", features: ["Everything in Pro", "2 Mentor Sessions / month", "Personal Study Plan", "Offline Downloads", "Priority Support", "National Rank Tracking"], missing: [], cta: "Go Elite", popular: false },
 ];
 
+// Each link now carries its own href. Platform/Exams links point to /signup
+// for now (same as the exam cards above) — once the login/signup "continue
+// to where you were headed" flow is added, these will carry a ?next=... so
+// a returning user lands directly on the right page instead of /dashboard.
 const FOOTER_COLS = [
-  { head: "Platform", links: ["Digital Library", "Mock Tests", "PYQs", "AI Tools", "Mentors"] },
-  { head: "Exams", links: ["UPSC", "JEE", "NEET", "SSC", "Banking"] },
-  { head: "Company", links: ["About Us", "Blog", "Careers", "Contact"] },
-  { head: "Legal", links: ["Privacy Policy", "Terms", "Refund Policy"] },
+  {
+    head: "Platform",
+    links: [
+      { label: "Digital Library", href: "/signup" },
+      { label: "Mock Tests", href: "/signup" },
+      { label: "PYQs", href: "/signup" },
+      { label: "AI Tools", href: "/signup" },
+      { label: "Mentors", href: "/signup" },
+    ],
+  },
+  {
+    head: "Exams",
+    links: [
+      { label: "UPSC", href: "/signup" },
+      { label: "JEE", href: "/signup" },
+      { label: "NEET", href: "/signup" },
+      { label: "SSC", href: "/signup" },
+      { label: "Banking", href: "/signup" },
+    ],
+  },
+  {
+    head: "Company",
+    links: [
+      { label: "About Us", href: "#" },
+      { label: "Blog", href: "#" },
+      { label: "Careers", href: "#" },
+      { label: "Contact", href: "mailto:talibansari623278@gmail.com" },
+    ],
+  },
+  {
+    head: "Legal",
+    links: [
+      { label: "Privacy Policy", href: "/privacy" },
+      { label: "Terms", href: "/terms" },
+      { label: "Refund Policy", href: "#" },
+    ],
+  },
+];
+
+const SOCIAL_LINKS = [
+  { icon: GithubIcon, href: "https://github.com/talibansari1914", label: "GitHub" },
+  { icon: InstagramIcon, href: "https://www.instagram.com/?hl=en", label: "Instagram" },
+  { icon: Mail, href: "mailto:talibansari623278@gmail.com", label: "Email" },
 ];
 
 const G = {
@@ -387,8 +452,19 @@ export default function Home() {
                 India's most intelligent learning platform for competitive exam preparation.
               </p>
               <div style={{ display: "flex", gap: "8px" }}>
-                {["𝕏", "📷", "▶", "✈"].map(s => (
-                  <button key={s} style={{ width: "32px", height: "32px", borderRadius: "8px", background: "#111827", border: "1px solid rgba(255,255,255,0.07)", color: "#64748B", fontSize: "0.82rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>{s}</button>
+                {SOCIAL_LINKS.map(({ icon: Icon, href, label }) => (
+                  <a
+                    key={label}
+                    href={href}
+                    target={href.startsWith("http") ? "_blank" : undefined}
+                    rel={href.startsWith("http") ? "noopener noreferrer" : undefined}
+                    aria-label={label}
+                    style={{ width: "32px", height: "32px", borderRadius: "8px", background: "#111827", border: "1px solid rgba(255,255,255,0.07)", color: "#64748B", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", transition: "color 0.2s, border-color 0.2s" }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = "#F59E0B"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(245,158,11,0.3)"; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = "#64748B"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.07)"; }}
+                  >
+                    <Icon size={15} />
+                  </a>
                 ))}
               </div>
             </div>
@@ -396,21 +472,21 @@ export default function Home() {
               <div key={col.head}>
                 <h4 style={{ fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "white", marginBottom: "18px" }}>{col.head}</h4>
                 {col.links.map(l => (
-                  <Link key={l} href="#" style={{ display: "block", fontSize: "0.83rem", color: "#475569", marginBottom: "10px", textDecoration: "none", transition: "color 0.2s" }}
+                  <Link key={l.label} href={l.href} style={{ display: "block", fontSize: "0.83rem", color: "#475569", marginBottom: "10px", textDecoration: "none", transition: "color 0.2s" }}
                     onMouseEnter={e => (e.target as HTMLElement).style.color = "white"}
                     onMouseLeave={e => (e.target as HTMLElement).style.color = "#475569"}>
-                    {l}
+                    {l.label}
                   </Link>
                 ))}
               </div>
             ))}
           </div>
           <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)", paddingTop: "24px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
-            <p style={{ fontSize: "0.78rem", color: "#334155" }}>© 2025 Mentora. All rights reserved. Made with ❤️ in India.</p>
+            <p style={{ fontSize: "0.78rem", color: "#334155" }}>© 2026 Mentora. All rights reserved. Made with ❤️ in India.</p>
             <div style={{ display: "flex", gap: "20px" }}>
-              {["Privacy", "Terms", "Contact"].map(l => (
-                <Link key={l} href="#" style={{ fontSize: "0.78rem", color: "#334155", textDecoration: "none" }}>{l}</Link>
-              ))}
+              <Link href="/privacy" style={{ fontSize: "0.78rem", color: "#334155", textDecoration: "none" }}>Privacy</Link>
+              <Link href="/terms" style={{ fontSize: "0.78rem", color: "#334155", textDecoration: "none" }}>Terms</Link>
+              <a href="mailto:talibansari623278@gmail.com" style={{ fontSize: "0.78rem", color: "#334155", textDecoration: "none" }}>Contact</a>
             </div>
           </div>
         </div>

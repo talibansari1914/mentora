@@ -49,6 +49,14 @@ export interface MentorReview {
   created_at?: string;
 }
 
+// What getReviewsForMentor actually returns — a MentorReview plus the
+// reviewer's display name, resolved server-side via the
+// get_mentor_reviews_with_names RPC (see the migration of the same name)
+// since profiles' RLS only lets a user read their own profile row directly.
+export interface MentorReviewWithReviewer extends MentorReview {
+  reviewer_name: string;
+}
+
 export interface MentorApplication {
   id: string;
   user_id?: string;

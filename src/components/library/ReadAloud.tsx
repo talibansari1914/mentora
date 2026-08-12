@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { G } from "@/constants/colors";
+import React, { useEffect, useState } from "react";
 
 export default function ReadAloud({ text }: { text: string }) {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -73,45 +72,90 @@ export default function ReadAloud({ text }: { text: string }) {
   }
 
   const selectStyle: React.CSSProperties = {
-    background: "#0F172A",
-    border: "1px solid rgba(255,255,255,.08)",
+    background: "var(--theme-card-bg, #FFFFFF)",
+    border: "1px solid var(--theme-border, #CBD5E1)",
     borderRadius: "10px",
-    padding: "10px 12px",
-    color: "white",
-    fontSize: ".85rem",
+    padding: "10px 14px",
+    color: "var(--theme-text-main, #0F172A)",
+    fontSize: "0.88rem",
     outline: "none",
+    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.03)",
   };
 
   return (
     <div>
       {voices.length === 0 ? (
-        <p style={{ color: "#64748B", fontSize: ".85rem" }}>
+        <div
+          style={{
+            background: "var(--theme-hover-bg, #F8FAFC)",
+            border: "1px solid var(--theme-border, #E2E8F0)",
+            borderRadius: "12px",
+            padding: "16px",
+            color: "var(--theme-text-sub, #64748B)",
+            fontSize: "0.85rem",
+          }}
+        >
           Loading voices from your browser... (if this doesn't load, your browser may not support
           text-to-speech).
-        </p>
+        </div>
       ) : (
         <>
           <div style={{ marginBottom: "16px" }}>
-            <label style={{ display: "block", color: "#94A3B8", fontSize: ".78rem", fontWeight: 600, marginBottom: "6px", textTransform: "uppercase" }}>
+            <label
+              style={{
+                display: "block",
+                color: "var(--theme-text-sub, #475569)",
+                fontSize: "0.78rem",
+                fontWeight: 700,
+                marginBottom: "6px",
+                textTransform: "uppercase",
+                letterSpacing: "0.03em",
+              }}
+            >
               Voice
             </label>
-            <select value={selectedVoice} onChange={(e) => setSelectedVoice(e.target.value)} style={{ ...selectStyle, width: "100%" }}>
+            <select
+              value={selectedVoice}
+              onChange={(e) => setSelectedVoice(e.target.value)}
+              style={{ ...selectStyle, width: "100%" }}
+            >
               {voices.map((v) => (
                 <option key={v.name} value={v.name}>
                   {v.name} ({v.lang})
                 </option>
               ))}
             </select>
-            <p style={{ color: "#475569", fontSize: ".72rem", marginTop: "6px" }}>
+            <p style={{ color: "var(--theme-text-sub, #64748B)", fontSize: "0.75rem", marginTop: "6px", lineHeight: "1.4" }}>
               Available voices (and whether they sound male/female) depend on your device — this list
               comes directly from your browser, not from Mentora.
             </p>
           </div>
 
           <div style={{ marginBottom: "20px" }}>
-            <label style={{ display: "block", color: "#94A3B8", fontSize: ".78rem", fontWeight: 600, marginBottom: "6px", textTransform: "uppercase" }}>
-              Speed: {speed.toFixed(1)}x
-            </label>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "6px",
+              }}
+            >
+              <label
+                style={{
+                  display: "block",
+                  color: "var(--theme-text-sub, #475569)",
+                  fontSize: "0.78rem",
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.03em",
+                }}
+              >
+                Speed
+              </label>
+              <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--theme-text-main, #0F172A)" }}>
+                {speed.toFixed(1)}x
+              </span>
+            </div>
             <input
               type="range"
               min={0.5}
@@ -119,25 +163,33 @@ export default function ReadAloud({ text }: { text: string }) {
               step={0.1}
               value={speed}
               onChange={(e) => setSpeed(Number(e.target.value))}
-              style={{ width: "100%" }}
+              style={{
+                width: "100%",
+                accentColor: "var(--theme-accent, #F59E0B)",
+                cursor: "pointer",
+              }}
             />
           </div>
 
-          <div style={{ display: "flex", gap: "10px" }}>
+          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
             {!speaking ? (
               <button
                 onClick={handlePlay}
                 disabled={!text.trim()}
                 style={{
                   flex: 1,
-                  background: G.grad,
+                  minWidth: "140px",
+                  background: "var(--theme-accent, #F59E0B)",
                   border: "none",
-                  color: "#111827",
+                  color: "var(--theme-accent-text, #0F172A)",
                   padding: "12px",
                   borderRadius: "10px",
                   cursor: text.trim() ? "pointer" : "not-allowed",
                   fontWeight: 700,
+                  fontSize: "0.88rem",
                   opacity: text.trim() ? 1 : 0.6,
+                  boxShadow: text.trim() ? "0 2px 6px var(--theme-accent-glow, rgba(245, 158, 11, 0.25))" : "none",
+                  transition: "all 0.15s ease",
                 }}
               >
                 ▶ Play
@@ -148,13 +200,17 @@ export default function ReadAloud({ text }: { text: string }) {
                   onClick={handlePauseResume}
                   style={{
                     flex: 1,
-                    background: "transparent",
-                    border: "1px solid rgba(255,255,255,.1)",
-                    color: "white",
+                    minWidth: "120px",
+                    background: "var(--theme-card-bg, #FFFFFF)",
+                    border: "1px solid var(--theme-border, #CBD5E1)",
+                    color: "var(--theme-text-main, #0F172A)",
                     padding: "12px",
                     borderRadius: "10px",
                     cursor: "pointer",
                     fontWeight: 700,
+                    fontSize: "0.88rem",
+                    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.03)",
+                    transition: "all 0.15s ease",
                   }}
                 >
                   {paused ? "▶ Resume" : "⏸ Pause"}
@@ -163,13 +219,16 @@ export default function ReadAloud({ text }: { text: string }) {
                   onClick={handleStop}
                   style={{
                     flex: 1,
-                    background: "rgba(239,68,68,.1)",
-                    border: "1px solid rgba(239,68,68,.3)",
-                    color: "#EF4444",
+                    minWidth: "120px",
+                    background: "#FEF2F2",
+                    border: "1px solid #FCA5A5",
+                    color: "#DC2626",
                     padding: "12px",
                     borderRadius: "10px",
                     cursor: "pointer",
                     fontWeight: 700,
+                    fontSize: "0.88rem",
+                    transition: "all 0.15s ease",
                   }}
                 >
                   ⏹ Stop

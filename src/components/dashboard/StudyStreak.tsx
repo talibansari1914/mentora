@@ -33,27 +33,73 @@ export default function StudyStreak({ streak }: StudyStreakProps) {
           gap: "8px",
         }}
       >
-        <h3 style={{ fontSize: "1.05rem", fontWeight: 700 }}>Study Streak</h3>
-        <span style={{ color: "#F59E0B", fontWeight: 700 }}>🔥 {streak} Days</span>
+        <h3
+          style={{
+            fontSize: "1.05rem",
+            fontWeight: 700,
+            color: "var(--theme-text-main, #F8FAFC)",
+          }}
+        >
+          Study Streak
+        </h3>
+        <span
+          style={{
+            color: "var(--theme-accent, #F59E0B)",
+            fontWeight: 700,
+          }}
+        >
+          🔥 {streak} Days
+        </span>
       </div>
 
-      <div className="streak-days-row" style={{ display: "flex", justifyContent: "space-between", marginBottom: "18px", gap: "4px" }}>
+      <div
+        className="streak-days-row"
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          marginBottom: "18px",
+          gap: "4px",
+        }}
+      >
         {streakDays.map((d, i) => (
-          <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
-            <span style={{ color: "#64748B", fontSize: ".75rem" }}>{d.day}</span>
+          <div
+            key={i}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <span
+              style={{
+                color: "var(--theme-muted-text, #64748B)",
+                fontSize: ".75rem",
+                fontWeight: 600,
+              }}
+            >
+              {d.day}
+            </span>
             <div
               className="streak-day-dot"
               style={{
                 width: "34px",
                 height: "34px",
                 borderRadius: "50%",
-                background: d.done ? "#22C55E" : d.today ? "#F59E0B" : "#1E293B",
+                background: d.done
+                  ? "#22C55E"
+                  : d.today
+                  ? "var(--theme-accent, #F59E0B)"
+                  : "var(--theme-border, #1E293B)",
                 display: "grid",
                 placeItems: "center",
                 fontSize: ".82rem",
                 fontWeight: 700,
                 color: "white",
                 flexShrink: 0,
+                boxShadow: d.today
+                  ? "0 0 12px var(--theme-accent-glow, rgba(245, 158, 11, 0.4))"
+                  : "none",
               }}
             >
               {d.done ? "✓" : ""}
@@ -63,7 +109,14 @@ export default function StudyStreak({ streak }: StudyStreakProps) {
       </div>
 
       {/* Progress toward a 30-day streak goal */}
-      <div style={{ height: "8px", background: "#1E293B", borderRadius: "100px", overflow: "hidden" }}>
+      <div
+        style={{
+          height: "8px",
+          background: "var(--theme-border, #1E293B)",
+          borderRadius: "100px",
+          overflow: "hidden",
+        }}
+      >
         <div
           style={{
             width: `${Math.min((streak / 30) * 100, 100)}%`,

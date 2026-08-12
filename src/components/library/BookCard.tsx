@@ -1,7 +1,7 @@
 "use client";
 
+import React from "react";
 import { useRouter } from "next/navigation";
-import { G } from "@/constants/colors";
 import { examColor } from "@/constants/library";
 import { Book } from "@/types/book";
 import StarRating from "./StarRating";
@@ -28,24 +28,28 @@ export default function BookCard({
   return (
     <div
       style={{
-        ...G.card,
-        padding: 0,
+        background: "var(--theme-card-bg, #FFFFFF)",
+        border: "1px solid var(--theme-border, #E2E8F0)",
+        borderRadius: "16px",
         overflow: "hidden",
         cursor: "pointer",
         display: "flex",
         flexDirection: "column",
-        transition: "transform .2s, border-color .2s",
+        boxShadow: "0 1px 3px 0 rgba(0, 0, 0, 0.05)",
+        transition: "transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease",
       }}
       onMouseEnter={(e) => {
-        (e.currentTarget as HTMLElement).style.transform = "translateY(-4px)";
-        (e.currentTarget as HTMLElement).style.borderColor = "rgba(245,158,11,.3)";
+        const el = e.currentTarget as HTMLElement;
+        el.style.transform = "translateY(-4px)";
+        el.style.borderColor = "var(--theme-accent, #F59E0B)";
+        el.style.boxShadow = "0 10px 20px -5px rgba(245, 158, 11, 0.15), 0 4px 6px -2px rgba(0, 0, 0, 0.05)";
       }}
       onMouseLeave={(e) => {
-        (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
-        (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,.06)";
+        const el = e.currentTarget as HTMLElement;
+        el.style.transform = "translateY(0)";
+        el.style.borderColor = "var(--theme-border, #E2E8F0)";
+        el.style.boxShadow = "0 1px 3px 0 rgba(0, 0, 0, 0.05)";
       }}
-      // Tapping anywhere on the card (except the action buttons, which stop
-      // propagation) opens the full Book Detail page.
       onClick={() => router.push(`/library/book/${book.id}`)}
     >
       {/* Cover */}
@@ -58,49 +62,51 @@ export default function BookCard({
           alignItems: "center",
           justifyContent: "center",
           fontSize: "2.8rem",
+          userSelect: "none",
         }}
       >
         {book.icon}
 
-        {book.isNew && (
-          <span
-            style={{
-              position: "absolute",
-              top: "10px",
-              left: "10px",
-              fontSize: "0.6rem",
-              fontWeight: 800,
-              textTransform: "uppercase",
-              background: "#080C14",
-              color: "#F59E0B",
-              padding: "3px 9px",
-              borderRadius: "100px",
-              border: "1px solid rgba(245,158,11,.4)",
-            }}
-          >
-            New
-          </span>
-        )}
+        {/* Badges */}
+        <div style={{ position: "absolute", top: "10px", left: "10px", display: "flex", gap: "6px" }}>
+          {book.isNew && (
+            <span
+              style={{
+                fontSize: "0.6rem",
+                fontWeight: 800,
+                textTransform: "uppercase",
+                background: "#0F172A",
+                color: "#F59E0B",
+                padding: "3px 9px",
+                borderRadius: "100px",
+                border: "1px solid #F59E0B",
+                letterSpacing: "0.05em",
+              }}
+            >
+              New
+            </span>
+          )}
 
-        {book.premium && (
-          <span
-            style={{
-              position: "absolute",
-              top: "10px",
-              left: book.isNew ? "52px" : "10px",
-              fontSize: "0.6rem",
-              fontWeight: 800,
-              textTransform: "uppercase",
-              background: "rgba(99,102,241,.9)",
-              color: "white",
-              padding: "3px 9px",
-              borderRadius: "100px",
-            }}
-          >
-            Pro
-          </span>
-        )}
+          {book.premium && (
+            <span
+              style={{
+                fontSize: "0.6rem",
+                fontWeight: 800,
+                textTransform: "uppercase",
+                background: "#4F46E5",
+                color: "#FFFFFF",
+                padding: "3px 9px",
+                borderRadius: "100px",
+                letterSpacing: "0.05em",
+                boxShadow: "0 1px 2px rgba(0,0,0,0.1)",
+              }}
+            >
+              Pro
+            </span>
+          )}
+        </div>
 
+        {/* Quick Action Overlay Buttons */}
         <div style={{ position: "absolute", top: "10px", right: "10px", display: "flex", gap: "6px" }}>
           {onToggleWishlist && (
             <button
@@ -110,17 +116,19 @@ export default function BookCard({
               }}
               title={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
               style={{
-                width: "28px",
-                height: "28px",
-                borderRadius: "8px",
-                background: "rgba(8,12,20,.6)",
-                border: "none",
+                width: "32px",
+                height: "32px",
+                borderRadius: "10px",
+                background: "rgba(255, 255, 255, 0.9)",
+                backdropFilter: "blur(4px)",
+                border: "1px solid rgba(226, 232, 240, 0.8)",
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontSize: "0.85rem",
-                color: isWishlisted ? "#FBBF24" : "white",
+                fontSize: "0.9rem",
+                boxShadow: "0 2px 4px rgba(0,0,0,0.06)",
+                transition: "transform 0.1s ease",
               }}
             >
               {isWishlisted ? "💛" : "🤍"}
@@ -134,24 +142,26 @@ export default function BookCard({
             }}
             title={isFavorite ? "Remove bookmark" : "Bookmark this book"}
             style={{
-              width: "28px",
-              height: "28px",
-              borderRadius: "8px",
-              background: "rgba(8,12,20,.6)",
-              border: "none",
+              width: "32px",
+              height: "32px",
+              borderRadius: "10px",
+              background: "rgba(255, 255, 255, 0.9)",
+              backdropFilter: "blur(4px)",
+              border: "1px solid rgba(226, 232, 240, 0.8)",
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              fontSize: "0.85rem",
-              color: isFavorite ? "#F59E0B" : "white",
+              fontSize: "0.9rem",
+              boxShadow: "0 2px 4px rgba(0,0,0,0.06)",
+              transition: "transform 0.1s ease",
             }}
           >
             {isFavorite ? "🔖" : "🏷️"}
           </button>
         </div>
 
-        {/* Continue Reading progress bar, only shown when progress is passed in */}
+        {/* Continue Reading progress bar */}
         {typeof progressPercent === "number" && (
           <div
             style={{
@@ -159,55 +169,77 @@ export default function BookCard({
               bottom: 0,
               left: 0,
               right: 0,
-              height: "4px",
-              background: "rgba(0,0,0,.3)",
+              height: "5px",
+              background: "rgba(15, 23, 42, 0.15)",
             }}
           >
-            <div style={{ width: `${progressPercent}%`, height: "100%", background: "#F59E0B" }} />
+            <div
+              style={{
+                width: `${Math.min(100, Math.max(0, progressPercent))}%`,
+                height: "100%",
+                background: "var(--theme-accent, #F59E0B)",
+                borderRadius: "0 2px 2px 0",
+              }}
+            />
           </div>
         )}
       </div>
 
-      {/* Info */}
-      <div style={{ padding: "14px", display: "flex", flexDirection: "column", gap: "8px", flex: 1 }}>
+      {/* Info Body */}
+      <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "10px", flex: 1 }}>
         <div>
           <p
             style={{
-              fontSize: "0.88rem",
+              fontSize: "0.92rem",
               fontWeight: 700,
-              marginBottom: "3px",
-              lineHeight: 1.3,
+              color: "var(--theme-text-main, #0F172A)",
+              marginBottom: "4px",
+              lineHeight: 1.35,
               display: "-webkit-box",
               WebkitLineClamp: 2,
-              WebkitBoxOrient: "vertical" as const,
+              WebkitBoxOrient: "vertical",
               overflow: "hidden",
             }}
           >
             {book.title}
           </p>
-          <p style={{ fontSize: "0.74rem", color: "#64748B" }}>{book.author}</p>
+          <p style={{ fontSize: "0.78rem", color: "var(--theme-text-sub, #64748B)", fontWeight: 500, margin: 0 }}>
+            {book.author}
+          </p>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
           <span
             style={{
-              fontSize: "0.62rem",
+              fontSize: "0.65rem",
               fontWeight: 700,
-              color: "#F59E0B",
-              background: "rgba(245,158,11,.1)",
-              border: "1px solid rgba(245,158,11,.15)",
+              color: "#B45309",
+              background: "#FEF3C7",
+              border: "1px solid #FDE68A",
               borderRadius: "100px",
               padding: "2px 8px",
             }}
           >
             {book.exam}
           </span>
-          <span style={{ fontSize: "0.62rem", color: "#64748B" }}>{book.pages}p</span>
+          <span style={{ fontSize: "0.7rem", color: "var(--theme-text-sub, #64748B)", fontWeight: 500 }}>
+            {book.pages} pages
+          </span>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "auto", paddingTop: "6px" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginTop: "auto",
+            paddingTop: "4px",
+          }}
+        >
           <StarRating rating={book.rating} />
-          <span style={{ fontSize: "0.68rem", color: "#475569" }}>↓ {book.downloads}</span>
+          <span style={{ fontSize: "0.72rem", color: "var(--theme-text-sub, #64748B)", fontWeight: 600 }}>
+            ↓ {book.downloads.toLocaleString()}
+          </span>
         </div>
 
         <button
@@ -221,15 +253,17 @@ export default function BookCard({
             router.push(`/library/read/${book.id}`);
           }}
           style={{
-            marginTop: "6px",
-            padding: "9px",
-            borderRadius: "9px",
-            border: "none",
+            marginTop: "4px",
+            padding: "10px",
+            borderRadius: "10px",
+            border: book.premium ? "1px solid #C7D2FE" : "1px solid #FDE68A",
             cursor: book.premium ? "not-allowed" : "pointer",
-            background: book.premium ? "rgba(99,102,241,.12)" : "rgba(245,158,11,.1)",
-            color: book.premium ? "#818CF8" : "#F59E0B",
-            fontSize: "0.8rem",
+            background: book.premium ? "#EEF2FF" : "#FEF3C7",
+            color: book.premium ? "#4338CA" : "#B45309",
+            fontSize: "0.82rem",
             fontWeight: 700,
+            textAlign: "center",
+            transition: "all 0.15s ease",
           }}
         >
           {book.premium ? "🔒 Unlock with Pro" : book.pdfUrl ? "Read Now" : "Read Now (Coming Soon)"}

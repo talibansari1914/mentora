@@ -3,20 +3,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { settingsService } from "@/services/settingsService";
+import { gradAmber, gradTextAmber } from "@/lib/theme";
+import { renderMarkdownLite } from "@/lib/renderMarkdownLite";
+import BackToDashboardLink from "@/components/common/BackToDashboardLink";
+import { getErrorMessage } from "@/lib/errors";
 
-const G = {
-  grad: "linear-gradient(135deg,#F59E0B,#FBBF24)",
-  gradText: {
-    background: "linear-gradient(135deg,#F59E0B,#FBBF24)",
-    WebkitBackgroundClip: "text",
-    WebkitTextFillColor: "transparent",
-  },
-  card: {
-    background: "#0B1220",
-    border: "1px solid rgba(255,255,255,.06)",
-    borderRadius: "16px",
-  },
-};
+const G = { grad: gradAmber, gradText: gradTextAmber };
 
 type Mode = "doubt" | "explain" | "debug" | "generate" | "practice";
 
@@ -57,44 +49,13 @@ function parseContent(text: string): ContentBlock[] {
   return blocks;
 }
 
-function renderTextBlock(text: string, keyPrefix: string) {
-  return text.split("\n").map((line, i) => {
-    const trimmed = line.trim();
-    const key = `${keyPrefix}-${i}`;
-
-    if (trimmed.startsWith("# ")) {
-      return (
-        <h2 key={key} style={{ fontSize: "1.3rem", fontWeight: 800, marginTop: i === 0 ? 0 : "18px", marginBottom: "10px" }}>
-          {trimmed.slice(2)}
-        </h2>
-      );
-    }
-    if (trimmed.startsWith("## ")) {
-      return (
-        <h3 key={key} style={{ fontSize: "1rem", fontWeight: 700, color: "#F59E0B", marginTop: "16px", marginBottom: "6px" }}>
-          {trimmed.slice(3)}
-        </h3>
-      );
-    }
-    if (trimmed.startsWith("- ")) {
-      return (
-        <div key={key} style={{ display: "flex", gap: "8px", marginBottom: "5px", color: "#CBD5E1", fontSize: ".9rem", lineHeight: 1.6 }}>
-          <span style={{ color: "#F59E0B" }}>•</span>
-          <span>{trimmed.slice(2)}</span>
-        </div>
-      );
-    }
-    if (trimmed === "") {
-      return <div key={key} style={{ height: "4px" }} />;
-    }
-    return (
-      <p key={key} style={{ color: "#CBD5E1", fontSize: ".9rem", lineHeight: 1.65, marginBottom: "6px" }}>
-        {trimmed}
-      </p>
-    );
-  });
+function renderTextBlock(text: string, textColor: string) {
+  return renderMarkdownLite(text, { textColor });
 }
 
+// Code blocks intentionally stay dark (terminal-style) in both light and dark
+// page themes — same convention as GitHub/VS Code, since code is more
+// readable on a fixed dark background regardless of the page around it.
 function CodeBlock({ code, lang }: { code: string; lang?: string }) {
   const [copied, setCopied] = useState(false);
 
@@ -117,6 +78,8 @@ function CodeBlock({ code, lang }: { code: string; lang?: string }) {
           alignItems: "center",
           background: "#111827",
           padding: "8px 14px",
+          flexWrap: "wrap",
+          gap: "6px",
         }}
       >
         <span style={{ color: "#94A3B8", fontSize: ".75rem", fontWeight: 600 }}>
@@ -153,16 +116,32 @@ function CodeBlock({ code, lang }: { code: string; lang?: string }) {
   );
 }
 
-function renderAnswer(text: string) {
+function renderAnswer(text: string, textColor: string) {
   const blocks = parseContent(text);
   return blocks.map((block, i) =>
     block.type === "code" ? (
       <CodeBlock key={i} code={block.content} lang={block.lang} />
     ) : (
-      <div key={i}>{renderTextBlock(block.content, `t${i}`)}</div>
+      <div key={i}>{renderTextBlock(block.content, textColor)}</div>
     )
   );
 }
+
+// Static theme-token style map — driven entirely by the shared --theme-* CSS
+// variables set on <html data-theme="dark|light">, so this page always mirrors
+// the dashboard toggle exactly with zero extra JS/state.
+const themeStyles = {
+  bg: "var(--theme-bg-main)",
+  color: "var(--theme-text-main)",
+  subText: "var(--theme-text-sub)",
+  mutedText: "var(--theme-text-sub)",
+  cardBg: "var(--theme-card-bg)",
+  cardBorder: "1px solid var(--theme-border)",
+  inputBg: "var(--theme-card-bg)",
+  inputColor: "var(--theme-text-main)",
+  inputBorder: "1px solid var(--theme-border)",
+  tabBorder: "var(--theme-border)",
+};
 
 export default function CodingMentorPage() {
   const [mode, setMode] = useState<Mode>("doubt");
@@ -175,23 +154,28 @@ export default function CodingMentorPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // AI Mentor personality/style/language, pulled from Settings → AI Mentor.
-  // Configured centrally in Settings so tone stays consistent across features.
   const [personality, setPersonality] = useState("Friendly");
   const [explanationStyle, setExplanationStyle] = useState("Detailed");
   const [mentorLanguage, setMentorLanguage] = useState("english");
 
   useEffect(() => {
+    let cancelled = false;
+
     (async () => {
       try {
         const settings = await settingsService.getSettings();
+        if (cancelled) return;
         setPersonality(settings.ai_mentor.personality);
         setExplanationStyle(settings.ai_mentor.explanationStyle);
         setMentorLanguage(settings.ai_mentor.language.toLowerCase());
       } catch {
-        // Settings couldn't be loaded — fall back to the defaults above.
+        // Settings couldn't be loaded — fall back to defaults.
       }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const needsCode = mode === "explain" || mode === "debug";
@@ -205,7 +189,30 @@ export default function CodingMentorPage() {
     practice: "Topic for practice questions",
   };
 
+  // Mirrors the validation in src/app/api/code-mentor/route.ts, so a bad
+  // submission is caught instantly here instead of only after a round trip
+  // to the server.
+  function validate(): string | null {
+    if (needsCode && !code.trim()) {
+      return "Please paste your code.";
+    }
+    if ((mode === "doubt" || mode === "generate" || mode === "practice") && !question.trim()) {
+      return mode === "doubt"
+        ? "Please describe your doubt."
+        : mode === "generate"
+        ? "Please describe what you want the code to do."
+        : "Please enter a topic for practice questions.";
+    }
+    return null;
+  }
+
   async function handleSubmit() {
+    const validationError = validate();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setAnswer("");
@@ -233,58 +240,73 @@ export default function CodingMentorPage() {
       }
 
       setAnswer(data.answer);
-    } catch (err: any) {
-      setError(err.message ?? "Something went wrong.");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Something went wrong."));
     } finally {
       setLoading(false);
     }
   }
 
+  const cardStyle: React.CSSProperties = {
+    background: themeStyles.cardBg,
+    border: themeStyles.cardBorder,
+    borderRadius: "16px",
+    transition: "background 0.3s, border 0.3s",
+    boxSizing: "border-box",
+  };
+
   const inputStyle: React.CSSProperties = {
     width: "100%",
-    background: "#0F172A",
-    border: "1px solid rgba(255,255,255,.08)",
+    background: themeStyles.inputBg,
+    border: themeStyles.inputBorder,
     borderRadius: "10px",
     padding: "11px 14px",
-    color: "white",
+    color: themeStyles.inputColor,
     fontSize: ".9rem",
     outline: "none",
     fontFamily: "inherit",
+    transition: "background 0.3s, color 0.3s, border 0.3s",
+    boxSizing: "border-box",
   };
 
   const tabBtn = (active: boolean): React.CSSProperties => ({
     padding: "9px 16px",
     borderRadius: "10px",
-    border: active ? "1px solid transparent" : "1px solid rgba(255,255,255,.1)",
+    border: active ? "1px solid transparent" : `1px solid ${themeStyles.tabBorder}`,
     background: active ? G.grad : "transparent",
-    color: active ? "#111827" : "#94A3B8",
+    color: active ? "var(--theme-accent-text)" : themeStyles.subText,
     fontWeight: 700,
     fontSize: ".82rem",
     cursor: "pointer",
+    flex: "1 1 auto",
+    textAlign: "center",
   });
 
   return (
     <div
       style={{
         minHeight: "100vh",
-        background: "#080C14",
-        color: "white",
+        background: themeStyles.bg,
+        color: themeStyles.color,
         fontFamily: "'DM Sans',sans-serif",
-        padding: "32px",
+        padding: "clamp(16px, 4vw, 32px)",
+        transition: "background 0.3s, color 0.3s",
+        boxSizing: "border-box",
       }}
     >
       <div style={{ maxWidth: "850px", margin: "0 auto" }}>
         <header style={{ marginBottom: "22px" }}>
-          <h1 style={{ fontSize: "2rem", fontWeight: 800, marginBottom: "8px" }}>
+          <BackToDashboardLink />
+          <h1 style={{ fontSize: "clamp(1.6rem, 3vw, 2rem)", fontWeight: 800, marginBottom: "8px", color: themeStyles.color }}>
             AI Coding <span style={G.gradText}>Mentor</span>
           </h1>
-          <p style={{ color: "#94A3B8", fontSize: ".95rem" }}>
+          <p style={{ color: themeStyles.subText, fontSize: ".95rem" }}>
             Ask a doubt, get your code explained, debug an error, generate code, or practice.
           </p>
-          <p style={{ color: "#475569", fontSize: ".78rem", marginTop: "8px" }}>
-            Personality: <strong style={{ color: "#94A3B8" }}>{personality}</strong> · Style:{" "}
-            <strong style={{ color: "#94A3B8" }}>{explanationStyle}</strong> ·{" "}
-            <Link href="/settings" style={{ color: "#F59E0B", textDecoration: "none" }}>
+          <p style={{ color: themeStyles.mutedText, fontSize: ".78rem", marginTop: "8px" }}>
+            Personality: <strong style={{ color: themeStyles.subText }}>{personality}</strong> · Style:{" "}
+            <strong style={{ color: themeStyles.subText }}>{explanationStyle}</strong> ·{" "}
+            <Link href="/settings" style={{ color: "var(--theme-accent)", textDecoration: "none" }}>
               Change in Settings
             </Link>
           </p>
@@ -298,14 +320,14 @@ export default function CodingMentorPage() {
           ))}
         </div>
 
-        <div style={{ ...G.card, padding: "22px", marginBottom: "20px" }}>
+        <div style={{ ...cardStyle, padding: "22px", marginBottom: "20px" }}>
           <div style={{ marginBottom: "14px" }}>
-            <label style={{ display: "block", color: "#94A3B8", fontSize: ".78rem", fontWeight: 600, marginBottom: "6px", textTransform: "uppercase" }}>
+            <label style={{ display: "block", color: themeStyles.subText, fontSize: ".78rem", fontWeight: 600, marginBottom: "6px", textTransform: "uppercase" }}>
               Language
             </label>
             <select value={language} onChange={(e) => setLanguage(e.target.value)} style={inputStyle}>
               {LANGUAGES.map((l) => (
-                <option key={l} value={l}>
+                <option key={l} value={l} style={{ background: themeStyles.inputBg, color: themeStyles.inputColor }}>
                   {l}
                 </option>
               ))}
@@ -314,7 +336,7 @@ export default function CodingMentorPage() {
 
           {needsCode && (
             <div style={{ marginBottom: "14px" }}>
-              <label style={{ display: "block", color: "#94A3B8", fontSize: ".78rem", fontWeight: 600, marginBottom: "6px", textTransform: "uppercase" }}>
+              <label style={{ display: "block", color: themeStyles.subText, fontSize: ".78rem", fontWeight: 600, marginBottom: "6px", textTransform: "uppercase" }}>
                 Your Code
               </label>
               <textarea
@@ -329,7 +351,7 @@ export default function CodingMentorPage() {
 
           {needsError && (
             <div style={{ marginBottom: "14px" }}>
-              <label style={{ display: "block", color: "#94A3B8", fontSize: ".78rem", fontWeight: 600, marginBottom: "6px", textTransform: "uppercase" }}>
+              <label style={{ display: "block", color: themeStyles.subText, fontSize: ".78rem", fontWeight: 600, marginBottom: "6px", textTransform: "uppercase" }}>
                 Error Message (optional)
               </label>
               <input
@@ -342,7 +364,7 @@ export default function CodingMentorPage() {
           )}
 
           <div style={{ marginBottom: "16px" }}>
-            <label style={{ display: "block", color: "#94A3B8", fontSize: ".78rem", fontWeight: 600, marginBottom: "6px", textTransform: "uppercase" }}>
+            <label style={{ display: "block", color: themeStyles.subText, fontSize: ".78rem", fontWeight: 600, marginBottom: "6px", textTransform: "uppercase" }}>
               {questionLabel[mode]}
             </label>
             <textarea
@@ -367,7 +389,7 @@ export default function CodingMentorPage() {
               width: "100%",
               background: G.grad,
               border: "none",
-              color: "#111827",
+              color: "var(--theme-accent-text)",
               padding: "13px",
               borderRadius: "10px",
               cursor: loading ? "not-allowed" : "pointer",
@@ -384,7 +406,7 @@ export default function CodingMentorPage() {
           )}
         </div>
 
-        {answer && <div style={{ ...G.card, padding: "24px" }}>{renderAnswer(answer)}</div>}
+        {answer && <div style={{ ...cardStyle, padding: "24px" }}>{renderAnswer(answer, themeStyles.subText)}</div>}
       </div>
     </div>
   );

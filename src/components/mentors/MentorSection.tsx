@@ -13,15 +13,41 @@ export default function MentorSection({ title, mentors, emptyMessage }: MentorSe
   if (mentors.length === 0 && !emptyMessage) return null;
 
   return (
-    <section style={{ marginBottom: "32px" }}>
-      <h2 style={{ fontSize: "1.1rem", fontWeight: 800, marginBottom: "14px" }}>{title}</h2>
+    <section style={{ marginBottom: "32px", width: "100%", boxSizing: "border-box" }}>
+      <style>{`
+        .mentor-section-title {
+          color: var(--theme-text-main);
+        }
+
+        .mentor-empty-msg {
+          color: var(--theme-text-sub);
+        }
+      `}</style>
+
+      <h2
+        className="mentor-section-title"
+        style={{ fontSize: "1.1rem", fontWeight: 800, marginBottom: "14px" }}
+      >
+        {title}
+      </h2>
 
       {mentors.length === 0 ? (
-        <p style={{ color: "#64748B", fontSize: ".85rem" }}>{emptyMessage}</p>
+        <p className="mentor-empty-msg" style={{ fontSize: ".85rem", fontWeight: 500 }}>
+          {emptyMessage}
+        </p>
       ) : (
-        <div style={{ display: "flex", gap: "14px", overflowX: "auto", paddingBottom: "8px" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: "14px",
+            overflowX: "auto",
+            paddingBottom: "8px",
+            scrollbarWidth: "thin",
+            WebkitOverflowScrolling: "touch",
+          }}
+        >
           {mentors.map((mentor) => (
-            <div key={mentor.id} style={{ minWidth: "230px", maxWidth: "230px", flexShrink: 0 }}>
+            <div key={mentor.id} style={{ minWidth: "250px", maxWidth: "250px", flexShrink: 0 }}>
               <MentorCard mentor={mentor} />
             </div>
           ))}

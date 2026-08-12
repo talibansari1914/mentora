@@ -1,22 +1,21 @@
 // Shared design tokens for the dashboard.
-// Import this in any dashboard component instead of redefining colors,
-// so the whole dashboard stays visually consistent from one place.
+// Uses CSS variables for dynamic theme switching with Gold/Amber defaults.
 
 export const G = {
-  // Main brand gradient (amber -> gold), used for buttons, progress bars, avatars.
-  grad: "linear-gradient(135deg,#F59E0B,#FBBF24)",
+  // Dynamic brand gradient using CSS variables (Gold/Amber default)
+  grad: "linear-gradient(135deg, var(--theme-accent, #F59E0B), var(--theme-accent-light, #FBBF24))",
 
-  // Same gradient, but clipped to text for gradient-colored headings.
+  // Dynamic gradient clipped to text for headings
   gradText: {
-    background: "linear-gradient(135deg,#F59E0B,#FBBF24)",
+    background: "linear-gradient(135deg, var(--theme-accent, #F59E0B), var(--theme-accent-light, #FBBF24))",
     WebkitBackgroundClip: "text",
     WebkitTextFillColor: "transparent",
   } as React.CSSProperties,
 
-  // Default card style used by every panel/section on the dashboard.
+  // Dynamic card style for dashboard panels/sections
   card: {
-    background: "#0B1220",
-    border: "1px solid rgba(255,255,255,.06)",
+    background: "var(--theme-card-bg, #0B1220)",
+    border: "var(--theme-card-border, 1px solid rgba(255, 255, 255, 0.06))",
     borderRadius: "16px",
   } as React.CSSProperties,
 };

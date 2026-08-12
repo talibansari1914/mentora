@@ -1,15 +1,25 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { G } from "@/constants/colors";
 import { libraryService } from "@/services/libraryService";
 import { bookService } from "@/services/bookService";
 import { LibraryProgress, Collection, Book } from "@/types/book";
+import BackToDashboardLink from "@/components/common/BackToDashboardLink";
 
-import PersonalLibraryTabs, { PersonalTab } from "@/components/library/PersonalLibraryTabs";
 import BookGrid from "@/components/library/BookGrid";
 import CollectionsPanel from "@/components/library/CollectionsPanel";
+import { getErrorMessage } from "@/lib/errors";
+
+export type PersonalTab = "continue" | "favorites" | "wishlist" | "completed" | "history" | "collections";
+
+const TABS: { id: PersonalTab; label: string; icon: string }[] = [
+  { id: "continue", label: "Continue Reading", icon: "📖" },
+  { id: "favorites", label: "Favorites", icon: "🏷️" },
+  { id: "wishlist", label: "Wishlist", icon: "🤍" },
+  { id: "completed", label: "Completed", icon: "✅" },
+  { id: "history", label: "Reading History", icon: "⏱️" },
+  { id: "collections", label: "Collections", icon: "📁" },
+];
 
 export default function PersonalLibraryPage() {
   const [tab, setTab] = useState<PersonalTab>("continue");
@@ -20,6 +30,8 @@ export default function PersonalLibraryPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+
     (async () => {
       setLoading(true);
       setError(null);
@@ -29,15 +41,20 @@ export default function PersonalLibraryPage() {
           libraryService.getCollections(),
           bookService.getAllBooks(),
         ]);
+        if (cancelled) return;
         setProgress(progressRows);
         setBooks(allBooks);
         setCollections(collectionRows);
-      } catch (err: any) {
-        setError(err.message ?? "Could not load your library.");
+      } catch (err: unknown) {
+        if (!cancelled) setError(getErrorMessage(err, "Could not load your library."));
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const favorites = useMemo(() => progress.filter((p) => p.is_favorite).map((p) => Number(p.book_id)), [progress]);
@@ -74,7 +91,7 @@ export default function PersonalLibraryPage() {
     try {
       await libraryService.toggleFavorite(String(bookId), !isCurrentlyFavorite);
     } catch (err) {
-      console.error("Could not save favorite:", (err as any)?.message ?? err);
+      console.error("Could not save favorite:", getErrorMessage(err));
     }
   }
 
@@ -101,12 +118,10 @@ export default function PersonalLibraryPage() {
     try {
       await libraryService.toggleWishlist(String(bookId), !isCurrentlyWishlisted);
     } catch (err) {
-      console.error("Could not save wishlist:", (err as any)?.message ?? err);
+      console.error("Could not save wishlist:", getErrorMessage(err));
     }
   }
 
-  // Derives each tab's book list from the same `progress` rows —
-  // no extra queries needed, just different filters on data already loaded.
   function booksFor(predicate: (p: LibraryProgress) => boolean, sortByRecent = false) {
     let rows = progress.filter(predicate);
     if (sortByRecent) {
@@ -125,29 +140,116 @@ export default function PersonalLibraryPage() {
   const historyBooks = booksFor((p) => !!p.last_opened_at, true);
   const favoriteBooks = books.filter((b) => favorites.includes(b.id));
 
+  // UI now reads directly from the global CSS variables (globals.css) that
+  // the dashboard's ThemeToggle sets via data-theme on <html>. No local
+  // isDark state, no localStorage polling, no interval — it stays perfectly
+  // in sync and reacts instantly to the toggle.
+  const themeStyles = {
+    bg: "var(--theme-bg-main, #080C14)",
+    color: "var(--theme-text-main, #F8FAFC)",
+    subText: "var(--theme-text-sub, #94A3B8)",
+    accent: "var(--theme-accent, #D97706)",
+    tabBorder: "var(--theme-border, rgba(255, 255, 255, 0.08))",
+    tabActiveBg: "var(--theme-accent, #F59E0B)",
+    tabActiveColor: "var(--theme-accent-text, #0F172A)",
+    tabInactiveBg: "var(--theme-card-bg, #111827)",
+    tabInactiveColor: "var(--theme-text-sub, #CBD5E1)",
+    tabInactiveHoverBg: "var(--theme-hover-bg, #1F2937)",
+  };
+
   return (
-    <div style={{ minHeight: "100vh", background: "#080C14", color: "white", fontFamily: "'DM Sans',sans-serif" }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        background: themeStyles.bg,
+        color: themeStyles.color,
+        fontFamily: "'DM Sans', sans-serif",
+        transition: "background 0.3s, color 0.3s",
+      }}
+    >
       <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "36px 32px 60px" }}>
         <div style={{ marginBottom: "24px" }}>
-          <Link href="/library" style={{ color: "#64748B", fontSize: ".85rem", textDecoration: "none" }}>
-            ← Back to Library
-          </Link>
-          <h1 style={{ fontSize: "1.9rem", fontWeight: 800, marginTop: "10px", marginBottom: "6px" }}>
-            My <span style={G.gradText}>Library</span>
+          <BackToDashboardLink href="/library" label="Back to Library" />
+          <h1
+            style={{
+              fontSize: "1.9rem",
+              fontWeight: 800,
+              marginTop: "10px",
+              marginBottom: "6px",
+              color: themeStyles.color,
+              transition: "color 0.3s",
+            }}
+          >
+            My <span style={{ color: themeStyles.accent }}>Library</span>
           </h1>
-          <p style={{ color: "#64748B", fontSize: "0.9rem" }}>
+          <p style={{ color: themeStyles.subText, fontSize: "0.9rem", fontWeight: 500, transition: "color 0.3s" }}>
             Everything you've saved, favorited, and are currently reading.
           </p>
         </div>
 
+        {/* Inline Fully Synced Tabs */}
+        <div
+          style={{
+            display: "flex",
+            gap: "10px",
+            overflowX: "auto",
+            paddingBottom: "8px",
+            marginBottom: "28px",
+            scrollbarWidth: "none",
+          }}
+        >
+          {TABS.map((t) => {
+            const isActive = tab === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "10px 18px",
+                  borderRadius: "12px",
+                  fontSize: "0.88rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                  border: isActive
+                    ? "1px solid var(--theme-accent-border, #F59E0B)"
+                    : `1px solid ${themeStyles.tabBorder}`,
+                  background: isActive ? themeStyles.tabActiveBg : themeStyles.tabInactiveBg,
+                  color: isActive ? themeStyles.tabActiveColor : themeStyles.tabInactiveColor,
+                  boxShadow: isActive
+                    ? "0 2px 6px var(--theme-accent-glow, rgba(245, 158, 11, 0.25))"
+                    : "0 1px 2px rgba(0,0,0,0.03)",
+                  transition: "all 0.2s ease",
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.background = themeStyles.tabInactiveHoverBg;
+                    e.currentTarget.style.color = "var(--theme-text-main, #FFFFFF)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.background = themeStyles.tabInactiveBg;
+                    e.currentTarget.style.color = themeStyles.tabInactiveColor;
+                  }
+                }}
+              >
+                <span>{t.icon}</span>
+                <span>{t.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
         {loading ? (
-          <p style={{ color: "#64748B", fontSize: ".85rem" }}>Loading...</p>
+          <p style={{ color: themeStyles.subText, fontSize: "0.85rem", fontWeight: 600 }}>Loading...</p>
         ) : error ? (
-          <p style={{ color: "#EF4444", fontSize: ".85rem" }}>{error}</p>
+          <p style={{ color: "#DC2626", fontSize: "0.85rem", fontWeight: 600 }}>{error}</p>
         ) : (
           <>
-            <PersonalLibraryTabs active={tab} onChange={setTab} />
-
             {tab === "continue" && (
               <BookGrid
                 books={continueBooks}

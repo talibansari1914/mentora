@@ -1,4 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/server";
+import { callAI } from "@/lib/aiProvider";
+import { checkAndIncrementUsage } from "@/lib/usageLimit";
+
+export const maxDuration = 60;
 
 type Mode = "explain" | "summary" | "notes" | "quiz" | "translate";
 type Language = "english" | "hindi" | "hinglish";
@@ -12,6 +17,27 @@ function languageName(lang: Language): string {
 
 export async function POST(req: NextRequest) {
   try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "You must be logged in to use this feature." },
+        { status: 401 }
+      );
+    }
+
+    const usage = await checkAndIncrementUsage(supabase, user.id, "book-tools");
+    if (!usage.allowed) {
+      const reason =
+        usage.featureCount >= usage.featureLimit
+          ? `You've reached today's limit (${usage.featureLimit}) for this feature.`
+          : `You've reached today's overall AI usage limit (${usage.totalLimit}).`;
+      return NextResponse.json({ error: reason }, { status: 429 });
+    }
+
     const {
       mode,
       text,
@@ -37,30 +63,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
-
-    if (!apiKey) {
-      return NextResponse.json(
-        {
-          error:
-            "GEMINI_API_KEY is not set in .env.local. Add it and restart the server.",
-        },
-        { status: 500 }
-      );
-    }
-
     const lang = languageName(language ?? "english");
-    // Shared formatting rule reused across every mode below, so the frontend
-    // renderer (the same "# / ## / -" mini-markdown used elsewhere) always works.
-    const formatRule = `Formatting: use "# " for a title, "## " for section headings, and "- " for bullet points. Write the entire response in ${lang}.`;
+    // Shared formatting rule reused across every mode below (except
+    // "translate", which intentionally returns plain prose with no markdown).
+    const formatRule = `Formatting: do NOT start with #, ##, *, or any markdown heading symbol — start directly with the title as plain text on the first line. Put every section title alone on its own line wrapped in double asterisks, like **Section Name** — nothing else on that line. Keep generous blank-line spacing between sections. Use double-asterisk bold **only** for section titles, key terms, and important concepts — never an entire paragraph. Use single-asterisk italics *only* for scientific names, foreign words, or rare emphasis. Use <u>...</u> underline very sparingly, at most 1-2 critical points. Use "- " for bullet points (two-space-indented "- " for plain, non-bolded sub-points). Avoid unnecessary emojis — at most one per section. Write the entire response in ${lang}.`;
 
     let systemPrompt = "";
-    let userPrompt = "";
+    let userText = "";
 
     switch (mode) {
       case "explain":
         systemPrompt = `You are an expert tutor. Explain the given book passage in simple, easy-to-understand language, as if explaining it to a beginner. Break it into the key ideas. ${formatRule}`;
-        userPrompt = `Explain this passage:\n\n${text}`;
+        userText = `Explain this passage:\n\n${text}`;
         break;
 
       case "summary": {
@@ -77,7 +91,7 @@ export async function POST(req: NextRequest) {
             ? "Present the entire summary as bullet points."
             : "Present the summary as short paragraphs.";
         systemPrompt = `You are an expert study-notes writer. Summarize the given ${scopeLabel} text, keeping only the most important points a student needs for exam revision. ${bulletInstruction} ${formatRule}`;
-        userPrompt = `Summarize this ${scopeLabel}:\n\n${text}`;
+        userText = `Summarize this ${scopeLabel}:\n\n${text}`;
         break;
       }
 
@@ -91,7 +105,7 @@ export async function POST(req: NextRequest) {
             ? 'Format as flashcards: for each key concept, write "## Q: <question>" followed by "- A: <answer>".'
             : "Write complete, well-organized notes covering everything important in the text.";
         systemPrompt = `You are an expert note-maker for competitive exam students. ${styleInstruction} ${formatRule}`;
-        userPrompt = `Make notes from this text:\n\n${text}`;
+        userText = `Make notes from this text:\n\n${text}`;
         break;
       }
 
@@ -101,7 +115,7 @@ export async function POST(req: NextRequest) {
           ? "Write them in the style of real Previous Year Questions (PYQs) for Indian competitive exams."
           : "Write them as standard practice MCQs.";
         systemPrompt = `You are an expert question setter. Create exactly ${count} multiple-choice questions based on the given text. ${styleInstruction} For each question, give 4 options labeled A-D. After all questions, add a "## Answer Key" section listing the correct option and a one-line explanation for each. ${formatRule}`;
-        userPrompt = `Create a quiz from this text:\n\n${text}`;
+        userText = `Create a quiz from this text:\n\n${text}`;
         break;
       }
 
@@ -109,57 +123,26 @@ export async function POST(req: NextRequest) {
         const targetLabel =
           language === "hindi" ? "Hindi" : language === "hinglish" ? "Hinglish" : "English";
         systemPrompt = `You are an expert translator. Translate the given text into ${targetLabel}, keeping the meaning accurate and the tone natural (not a robotic word-for-word translation). Just return the translated text directly — no title, no extra commentary, no markdown formatting.`;
-        userPrompt = `Translate this text:\n\n${text}`;
+        userText = `Translate this text:\n\n${text}`;
         break;
       }
     }
 
-    const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": apiKey,
-        },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: systemPrompt }] },
-          contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-          generationConfig: {
-            maxOutputTokens: 4096,
-            thinkingConfig: {
-              thinkingBudget: 0,
-            },
-          },
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error("Gemini API error:", errText);
+    let result: string;
+    try {
+      const aiResult = await callAI({
+        task: "book-tools",
+        systemPrompt,
+        userText,
+        maxOutputTokens: 4096,
+      });
+      result = aiResult.text;
+    } catch {
       return NextResponse.json(
         { error: "Failed to get a response from AI. Please try again in a moment." },
         { status: 502 }
       );
     }
-
-    const data = await response.json();
-
-    const finishReason = data.candidates?.[0]?.finishReason;
-
-    if (finishReason === "MAX_TOKENS") {
-      return NextResponse.json(
-        { error: "The response got too long to finish. Try pasting a shorter passage." },
-        { status: 502 }
-      );
-    }
-
-    const result: string =
-      data.candidates?.[0]?.content?.parts
-        ?.map((part: any) => part.text)
-        .filter(Boolean)
-        .join("\n") ?? "";
 
     if (!result) {
       return NextResponse.json(

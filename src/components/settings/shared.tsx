@@ -1,61 +1,73 @@
 "use client";
 
+import React from "react";
+import { CheckCircle2, AlertCircle } from "lucide-react";
+
 export const G = {
-  grad: "linear-gradient(135deg,#F59E0B,#FBBF24)",
+  grad: "linear-gradient(135deg, var(--theme-accent, #F59E0B), var(--theme-accent-light, #EAB308))",
   gradText: {
-    background: "linear-gradient(135deg,#F59E0B,#FBBF24)",
-    WebkitBackgroundClip: "text",
-    WebkitTextFillColor: "transparent",
+    color: "var(--theme-text-main, #0F172A)",
   },
   card: {
-    background: "#0B1220",
-    border: "1px solid rgba(255,255,255,.06)",
+    background: "var(--theme-card-bg, var(--card-bg, transparent))",
+    border: "1px solid var(--theme-border, rgba(150, 150, 150, 0.2))",
     borderRadius: "16px",
+    boxShadow: "0 1px 3px 0 rgba(0, 0, 0, 0.05)",
   },
 };
 
 export const inputStyle: React.CSSProperties = {
   width: "100%",
-  background: "#0F172A",
-  border: "1px solid rgba(255,255,255,.08)",
+  background: "var(--theme-hover-bg, var(--theme-card-bg, transparent))",
+  border: "1px solid var(--theme-border, rgba(150, 150, 150, 0.25))",
   borderRadius: "10px",
   padding: "11px 14px",
-  color: "white",
-  fontSize: ".9rem",
+  color: "var(--theme-text-main, inherit)",
+  fontSize: "0.9rem",
   outline: "none",
   fontFamily: "inherit",
   boxSizing: "border-box",
+  transition: "all 0.18s ease-out",
+  accentColor: "var(--theme-accent, #F59E0B)",
 };
 
 export function primaryBtn(disabled: boolean): React.CSSProperties {
   return {
-    background: G.grad,
+    background: "var(--theme-accent, #F59E0B)",
     border: "none",
-    color: "#111827",
+    color: "var(--theme-accent-text, #FFFFFF)",
     padding: "11px 22px",
     borderRadius: "10px",
     cursor: disabled ? "not-allowed" : "pointer",
     fontWeight: 700,
-    fontSize: ".88rem",
+    fontSize: "0.88rem",
     opacity: disabled ? 0.6 : 1,
+    transition: "all 0.18s ease-out",
+    boxShadow: disabled ? "none" : "0 2px 6px var(--theme-accent-glow, rgba(245, 158, 11, 0.25))",
   };
 }
 
 export function Toast({ message, type }: { message: string; type: "success" | "error" }) {
+  const isSuccess = type === "success";
   return (
     <div
       style={{
         padding: "12px 16px",
         borderRadius: "10px",
         marginBottom: "18px",
-        fontSize: ".85rem",
-        background: type === "success" ? "rgba(34,197,94,.08)" : "rgba(239,68,68,.08)",
-        border: `1px solid ${type === "success" ? "rgba(34,197,94,.25)" : "rgba(239,68,68,.25)"}`,
-        color: type === "success" ? "#22C55E" : "#EF4444",
+        fontSize: "0.85rem",
+        fontWeight: 500,
+        display: "flex",
+        alignItems: "center",
+        gap: "10px",
+        background: isSuccess ? "rgba(34, 197, 94, 0.12)" : "rgba(239, 68, 68, 0.12)",
+        border: `1px solid ${isSuccess ? "rgba(34, 197, 94, 0.3)" : "rgba(239, 68, 68, 0.3)"}`,
+        color: isSuccess ? "#22C55E" : "#EF4444",
+        boxSizing: "border-box",
       }}
     >
-      {type === "success" ? "✓ " : "⚠ "}
-      {message}
+      {isSuccess ? <CheckCircle2 size={18} style={{ flexShrink: 0 }} /> : <AlertCircle size={18} style={{ flexShrink: 0 }} />}
+      <span>{message}</span>
     </div>
   );
 }
@@ -63,8 +75,14 @@ export function Toast({ message, type }: { message: string; type: "success" | "e
 export function FieldLabel({ title, hint }: { title: string; hint?: string }) {
   return (
     <div style={{ marginBottom: "8px" }}>
-      <label style={{ display: "block", fontSize: ".85rem", fontWeight: 700, color: "white" }}>{title}</label>
-      {hint && <p style={{ fontSize: ".78rem", color: "#64748B", marginTop: "2px" }}>{hint}</p>}
+      <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 700, color: "var(--theme-text-main, inherit)" }}>
+        {title}
+      </label>
+      {hint && (
+        <p style={{ fontSize: "0.78rem", color: "var(--theme-text-sub, #64748B)", marginTop: "2px", margin: "2px 0 0 0" }}>
+          {hint}
+        </p>
+      )}
     </div>
   );
 }
@@ -72,8 +90,18 @@ export function FieldLabel({ title, hint }: { title: string; hint?: string }) {
 export function SectionHeading({ title, hint }: { title: string; hint?: string }) {
   return (
     <div style={{ marginBottom: "20px" }}>
-      <h2 style={{ fontSize: "1.2rem", fontWeight: 800, marginBottom: hint ? "4px" : 0 }}>{title}</h2>
-      {hint && <p style={{ color: "#64748B", fontSize: ".82rem" }}>{hint}</p>}
+      <h2
+        style={{
+          fontSize: "1.2rem",
+          fontWeight: 800,
+          color: "var(--theme-text-main, inherit)",
+          margin: 0,
+          marginBottom: hint ? "4px" : 0,
+        }}
+      >
+        {title}
+      </h2>
+      {hint && <p style={{ color: "var(--theme-text-sub, #64748B)", fontSize: "0.82rem", margin: 0 }}>{hint}</p>}
     </div>
   );
 }
@@ -96,25 +124,33 @@ export function Toggle({
         justifyContent: "space-between",
         alignItems: "center",
         padding: "12px 0",
-        borderBottom: "1px solid rgba(255,255,255,.06)",
+        borderBottom: "1px solid var(--theme-border, rgba(150, 150, 150, 0.15))",
         gap: "16px",
       }}
     >
       <div>
-        <p style={{ fontSize: ".88rem", fontWeight: 600 }}>{label}</p>
-        {hint && <p style={{ color: "#64748B", fontSize: ".76rem", marginTop: "2px" }}>{hint}</p>}
+        <p style={{ fontSize: "0.88rem", fontWeight: 600, color: "var(--theme-text-main, inherit)", margin: 0 }}>{label}</p>
+        {hint && (
+          <p style={{ color: "var(--theme-text-sub, #64748B)", fontSize: "0.76rem", marginTop: "2px", margin: "2px 0 0 0" }}>
+            {hint}
+          </p>
+        )}
       </div>
       <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
         onClick={() => onChange(!checked)}
         style={{
           width: "42px",
           height: "24px",
           borderRadius: "999px",
           border: "none",
-          background: checked ? G.grad : "rgba(255,255,255,.1)",
+          background: checked ? "var(--theme-accent, #F59E0B)" : "var(--theme-border, rgba(150, 150, 150, 0.3))",
           position: "relative",
           cursor: "pointer",
           flexShrink: 0,
+          transition: "background 0.2s ease-out",
         }}
       >
         <span
@@ -125,8 +161,9 @@ export function Toggle({
             width: "18px",
             height: "18px",
             borderRadius: "50%",
-            background: checked ? "#111827" : "white",
-            transition: "left .15s",
+            background: "#FFFFFF",
+            transition: "left 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
           }}
         />
       </button>
@@ -149,17 +186,19 @@ export function ChipGroup({
         const active = value === opt;
         return (
           <button
+            type="button"
             key={opt}
             onClick={() => onChange(opt)}
             style={{
               padding: "8px 16px",
               borderRadius: "999px",
-              border: active ? "1px solid transparent" : "1px solid rgba(255,255,255,.1)",
-              background: active ? G.grad : "transparent",
-              color: active ? "#111827" : "#94A3B8",
+              border: active ? "1px solid var(--theme-accent, #F59E0B)" : "1px solid var(--theme-border, rgba(150, 150, 150, 0.25))",
+              background: active ? "var(--theme-accent-soft, rgba(245, 158, 11, 0.15))" : "var(--theme-card-bg, transparent)",
+              color: active ? "var(--theme-accent, #F59E0B)" : "var(--theme-text-sub, inherit)",
               fontWeight: 700,
-              fontSize: ".8rem",
+              fontSize: "0.8rem",
               cursor: "pointer",
+              transition: "all 0.18s ease-out",
             }}
           >
             {opt}
@@ -193,17 +232,19 @@ export function MultiChipGroup({
         const active = values.includes(opt);
         return (
           <button
+            type="button"
             key={opt}
             onClick={() => toggle(opt)}
             style={{
               padding: "8px 16px",
               borderRadius: "999px",
-              border: active ? "1px solid transparent" : "1px solid rgba(255,255,255,.1)",
-              background: active ? G.grad : "transparent",
-              color: active ? "#111827" : "#94A3B8",
+              border: active ? "1px solid var(--theme-accent, #F59E0B)" : "1px solid var(--theme-border, rgba(150, 150, 150, 0.25))",
+              background: active ? "var(--theme-accent-soft, rgba(245, 158, 11, 0.15))" : "var(--theme-card-bg, transparent)",
+              color: active ? "var(--theme-accent, #F59E0B)" : "var(--theme-text-sub, inherit)",
               fontWeight: 700,
-              fontSize: ".8rem",
+              fontSize: "0.8rem",
               cursor: "pointer",
+              transition: "all 0.18s ease-out",
             }}
           >
             {opt}

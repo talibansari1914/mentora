@@ -1,6 +1,23 @@
 // src/services/authService.ts
 
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase";
+import { createInFlightDeduper } from "@/lib/asyncCache";
+import type { User } from "@supabase/supabase-js";
+
+// Cookie-aware browser client — same one used by the login/signup pages —
+// so auth state stays in sync with server components/middleware instead of
+// living only in localStorage (the old client's behavior).
+const supabase = createClient();
+
+// Almost every service in the app calls getCurrentUser() (directly, or via
+// getProfile() below) to find out who's logged in, and pages commonly fire
+// several of those service calls together via Promise.all. Without this,
+// each one of those concurrent calls opened its own network round trip to
+// Supabase's auth server for the exact same answer, which is what made
+// pages like Dashboard, Analytics, and Settings feel slow to load. This
+// dedupes calls that overlap in time — it doesn't change what any caller
+// gets back. See src/lib/asyncCache.ts for details.
+const dedupeCurrentUser = createInFlightDeduper<User | null>();
 
 export interface SignUpData {
   fullName: string;
@@ -8,6 +25,11 @@ export interface SignUpData {
   email: string;
   password: string;
   exam: string;
+  // Cloudflare Turnstile token from the signup form. Optional so this type
+  // doesn't force every caller to change, but Supabase Auth will reject the
+  // signUp call server-side once CAPTCHA protection is turned on in the
+  // Supabase dashboard and no token is supplied.
+  captchaToken?: string;
 }
 
 export interface UpdateProfileData {
@@ -61,6 +83,7 @@ class AuthService {
     email,
     password,
     exam,
+    captchaToken,
   }: SignUpData) {
     const normalizedExam = this.normalizeExam(exam);
 
@@ -74,6 +97,7 @@ class AuthService {
           first_name: firstName,
           exam: normalizedExam,
         },
+        captchaToken,
       },
     });
 
@@ -86,11 +110,12 @@ class AuthService {
   // LOGIN
   // ==========================
 
-  async signIn(email: string, password: string) {
+  async signIn(email: string, password: string, captchaToken?: string) {
     const { data, error } =
       await supabase.auth.signInWithPassword({
         email,
         password,
+        options: { captchaToken },
       });
 
     if (error) throw error;
@@ -126,14 +151,16 @@ class AuthService {
   // ==========================
 
   async getCurrentUser() {
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser();
+    return dedupeCurrentUser("current-user", async () => {
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
 
-    if (error) throw error;
+      if (error) throw error;
 
-    return user;
+      return user;
+    });
   }
     // ==========================
   // CURRENT SESSION
@@ -233,13 +260,18 @@ class AuthService {
   // RESET PASSWORD
   // ==========================
 
-  async resetPassword(email: string) {
+  async resetPassword(email: string, captchaToken?: string) {
     const { error } =
       await supabase.auth.resetPasswordForEmail(email, {
+        // Routed through the existing PKCE code-exchange route (see
+        // src/app/auth/callback/route.ts) instead of straight to /login, so
+        // the recovery link actually establishes a session before the user
+        // lands on the page where they type their new password.
         redirectTo:
           typeof window !== "undefined"
-            ? `${window.location.origin}/login`
+            ? `${window.location.origin}/auth/callback?next=${encodeURIComponent("/reset-password")}`
             : undefined,
+        captchaToken,
       });
 
     if (error) throw error;

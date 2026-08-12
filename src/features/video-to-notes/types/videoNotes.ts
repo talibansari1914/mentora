@@ -2,37 +2,35 @@
 // 1. INPUT & CONFIGURATION TYPES
 // ==========================================
 
-export type InputSourceType = "youtube" | "upload" | "text" | string;
+export type InputSourceType = "youtube" | "upload" | "text";
 
 export interface UploadedVideoMeta {
-  name?: string;
-  size?: number;
-  type?: string;
+  file?: File;
+  // These three are always set together (see InputSection.tsx's
+  // handleFileDrop) — required here, matching File's own required fields,
+  // so `config.videoFile.size` etc. type-checks whichever of the two
+  // (File | UploadedVideoMeta) videoFile actually holds at render time.
+  name: string;
+  size: number;
+  type: string;
   duration?: number;
-  file?: any; // Fixes: 'file' does not exist in UploadedVideoMeta
-  [key: string]: any;
+  // Object-URL created via URL.createObjectURL(file) for local preview —
+  // see InputSection.tsx's handleFileDrop.
+  previewUrl?: string;
 }
 
-// Allows both object options and plain string codes without conflicts
-export type LanguageOption =
-  | string
-  | {
-      code: string;
-      label: string;
-      flag?: string;
-      [key: string]: any;
-    }
-  | any;
+// Every call site in this feature only ever passes a plain language name
+// string (e.g. "English", "Hindi") — see constants/languages.ts.
+export type LanguageOption = string;
 
 export interface VideoNotesConfig {
   // Support both old and new naming conventions in your UI
   videoUrl?: string;
-  youtubeUrl?: string; // Fixes: 'youtubeUrl' does not exist
+  youtubeUrl?: string;
   sourceType?: InputSourceType;
-  language?: string | LanguageOption | any; // Fixes language string/object mismatch
+  language?: LanguageOption;
   uploadedFile?: UploadedVideoMeta | File | null;
-  videoFile?: UploadedVideoMeta | File | any; // Fixes: 'videoFile' does not exist
-  [key: string]: any;
+  videoFile?: UploadedVideoMeta | File | null;
 }
 
 // ==========================================
@@ -43,13 +41,11 @@ export interface ComparisonCard {
   title: string;
   description: string;
   examples?: string;
-  [key: string]: any;
 }
 
 export interface CodeBlock {
   language: string;
   code: string;
-  [key: string]: any;
 }
 
 export interface NoteSection {
@@ -58,7 +54,20 @@ export interface NoteSection {
   bullets?: string[];
   comparisonCards?: ComparisonCard[];
   codeBlock?: CodeBlock;
-  [key: string]: any;
+}
+
+// Shape of a section as notesService.ts actually receives it from
+// /api/video-notes (heading/content), plus the alternate field names
+// (title/description/details) it defensively falls back to. This is
+// what VideoNotesData.sections is really populated with today — kept
+// distinct from NoteSection (the richer, not-yet-rendered structure
+// above) rather than forcing the raw API shape to pretend to be it.
+export interface RawNoteSection {
+  heading?: string;
+  title?: string;
+  content?: string[] | string;
+  description?: string[] | string;
+  details?: string[] | string;
 }
 
 export interface VideoNotesData {
@@ -66,16 +75,17 @@ export interface VideoNotesData {
   summary?: string;
   keyConcepts?: string[];
   workflow?: string[];
-  sections?: NoteSection[];
-  
-  // Fixes: 'notes' and 'generatedAt' do not exist in NotesOutputSection & notesService
-  notes?: NoteSection[] | string | any;
-  generatedAt?: string | Date | any;
-  
+  sections?: RawNoteSection[];
+
+  // notesService.ts always builds this as a pre-formatted markdown string
+  // today (see getNotesAsText in NotesOutputSection.tsx, which still
+  // handles the NoteSection[] case defensively in case that ever changes).
+  notes?: string | NoteSection[];
+  generatedAt?: string;
+
   language?: string;
   duration?: string;
   source?: string;
-  [key: string]: any;
 }
 
 export type GeneratedNotesResult = VideoNotesData;

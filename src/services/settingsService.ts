@@ -1,5 +1,17 @@
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase";
 import { authService } from "./authService";
+import { createInFlightDeduper } from "@/lib/asyncCache";
+
+// Same cookie-aware singleton client as authService/middleware/server —
+// created explicitly here (instead of importing the old backward-compat
+// `supabase` export) so this file's session source is unambiguous.
+const supabase = createClient();
+
+// The Settings page loads getCurrentUser(), getProfile(), and
+// getSettings() together via Promise.all, and getSettings() independently
+// asked "who is logged in?" too. Deduping getUserId() collapses that into
+// a single auth check — see src/lib/asyncCache.ts.
+const dedupeUserId = createInFlightDeduper<string>();
 
 export interface ProfileExtra {
   bio: string;
@@ -9,6 +21,12 @@ export interface ProfileExtra {
   username: string;
   mobile: string;
   timezone: string;
+  // ISO timestamps, null until the user completes each step of the
+  // onboarding modal. Kept in profile_extra (rather than a new table) since
+  // it's a single small per-user flag, not something that needs its own
+  // schema.
+  termsAcceptedAt?: string | null;
+  onboardingCompletedAt?: string | null;
 }
 
 export interface StudyPreferences {
@@ -85,6 +103,8 @@ export const DEFAULT_SETTINGS: UserSettings = {
     username: "",
     mobile: "",
     timezone: "Asia/Kolkata",
+    termsAcceptedAt: null,
+    onboardingCompletedAt: null,
   },
   study_preferences: {
     dailyGoalHours: 4,
@@ -137,18 +157,20 @@ export const DEFAULT_SETTINGS: UserSettings = {
 };
 
 class SettingsService {
-  private async getUserId() {
-    const user = await authService.getCurrentUser();
+  private async getUserId(): Promise<string> {
+    return dedupeUserId("user-id", async () => {
+      const user = await authService.getCurrentUser();
 
-    if (!user) {
-      throw new Error("User not authenticated.");
-    }
+      if (!user) {
+        throw new Error("User not authenticated.");
+      }
 
-    return user.id;
+      return user.id;
+    });
   }
 
   // ==========================
-  // GET ALL SETTINGS (merged with defaults)
+  // GET ALL SETTINGS (Merged with defaults)
   // ==========================
 
   async getSettings(): Promise<UserSettings> {
@@ -160,7 +182,10 @@ class SettingsService {
       .eq("user_id", userId)
       .maybeSingle();
 
-    if (error) throw error;
+    if (error) {
+      console.error("[SettingsService] Error fetching settings:", error.message);
+      throw error;
+    }
 
     if (!data) {
       return DEFAULT_SETTINGS;
@@ -179,7 +204,7 @@ class SettingsService {
   }
 
   // ==========================
-  // UPDATE ONE SECTION (upsert — creates the row on first save)
+  // UPDATE ONE SECTION (Upsert - Safe Partial Update)
   // ==========================
 
   async updateSection<K extends keyof Omit<UserSettings, "user_id">>(
@@ -188,18 +213,48 @@ class SettingsService {
   ): Promise<void> {
     const userId = await this.getUserId();
 
-    const { error } = await supabase
-      .from("user_settings")
-      .upsert(
-        {
-          user_id: userId,
-          [section]: value,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id" }
-      );
+    const { error } = await supabase.from("user_settings").upsert(
+      {
+        user_id: userId,
+        [section]: value,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" }
+    );
 
-    if (error) throw error;
+    if (error) {
+      console.error(`[SettingsService] Error updating section ${section}:`, error.message);
+      throw error;
+    }
+  }
+
+  // ==========================
+  // RESET ALL SETTINGS TO DEFAULT
+  // ==========================
+
+  async resetSettings(): Promise<UserSettings> {
+    const userId = await this.getUserId();
+
+    const payload = {
+      user_id: userId,
+      profile_extra: DEFAULT_SETTINGS.profile_extra,
+      study_preferences: DEFAULT_SETTINGS.study_preferences,
+      ai_mentor: DEFAULT_SETTINGS.ai_mentor,
+      learning_preferences: DEFAULT_SETTINGS.learning_preferences,
+      notifications: DEFAULT_SETTINGS.notifications,
+      appearance: DEFAULT_SETTINGS.appearance,
+      language_region: DEFAULT_SETTINGS.language_region,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase.from("user_settings").upsert(payload, { onConflict: "user_id" });
+
+    if (error) {
+      console.error("[SettingsService] Error resetting settings:", error.message);
+      throw error;
+    }
+
+    return DEFAULT_SETTINGS;
   }
 
   // ==========================

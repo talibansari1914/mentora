@@ -1,5 +1,17 @@
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase";
 import { authService } from "./authService";
+import { createInFlightDeduper } from "@/lib/asyncCache";
+
+// Same cookie-aware singleton client as authService/middleware/server —
+// created explicitly here (instead of importing the old backward-compat
+// `supabase` export) so this file's session source is unambiguous.
+const supabase = createClient();
+
+// The Memory page loads getDueItems() and getUpcomingItems() together via
+// Promise.all, and both independently asked "who is logged in?". Deduping
+// getUserId() collapses that into a single auth check — see
+// src/lib/asyncCache.ts.
+const dedupeUserId = createInFlightDeduper<string>();
 
 export interface RevisionItem {
   id: string;
@@ -67,13 +79,15 @@ function computeNextSchedule(item: RevisionItem, quality: ReviewQuality) {
 
 class MemoryService {
   private async getUserId() {
-    const user = await authService.getCurrentUser();
+    return dedupeUserId("user-id", async () => {
+      const user = await authService.getCurrentUser();
 
-    if (!user) {
-      throw new Error("User not authenticated.");
-    }
+      if (!user) {
+        throw new Error("User not authenticated.");
+      }
 
-    return user.id;
+      return user.id;
+    });
   }
 
   // ==========================
@@ -145,12 +159,14 @@ class MemoryService {
   // ==========================
 
   async reviewItem(item: RevisionItem, quality: ReviewQuality): Promise<RevisionItem> {
+    const userId = await this.getUserId();
     const schedule = computeNextSchedule(item, quality);
 
     const { data, error } = await supabase
       .from("revision_items")
       .update(schedule)
       .eq("id", item.id)
+      .eq("user_id", userId)
       .select()
       .single();
 
@@ -164,7 +180,13 @@ class MemoryService {
   // ==========================
 
   async deleteItem(id: string): Promise<boolean> {
-    const { error } = await supabase.from("revision_items").delete().eq("id", id);
+    const userId = await this.getUserId();
+
+    const { error } = await supabase
+      .from("revision_items")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", userId);
 
     if (error) throw error;
 

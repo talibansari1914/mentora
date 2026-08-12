@@ -3,72 +3,102 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { settingsService } from "@/services/settingsService";
+import { gradAmber, gradTextAmber } from "@/lib/theme";
+import { renderMarkdownLite } from "@/lib/renderMarkdownLite";
+import BackToDashboardLink from "@/components/common/BackToDashboardLink";
+import { getErrorMessage } from "@/lib/errors";
 
-const G = {
-  grad: "linear-gradient(135deg,#F59E0B,#FBBF24)",
-  gradText: {
-    background: "linear-gradient(135deg,#F59E0B,#FBBF24)",
-    WebkitBackgroundClip: "text",
-    WebkitTextFillColor: "transparent",
-  },
-  card: {
-    background: "#0B1220",
-    border: "1px solid rgba(255,255,255,.06)",
-    borderRadius: "16px",
-  },
-};
+const G = { grad: gradAmber, gradText: gradTextAmber };
 
-type Mode = "essay" | "grammar" | "rewrite" | "paraphrase";
+// "writing" covers the 4 content types below (essay/email/application/letter)
+// via the Content Type dropdown; grammar/rewrite/paraphrase are unchanged,
+// separate tabs exactly as before.
+type Tab = "writing" | "grammar" | "rewrite" | "paraphrase";
+type ContentType = "essay" | "email" | "application" | "letter";
 
-const MODES: { value: Mode; label: string }[] = [
-  { value: "essay", label: "Essay Writing" },
+const TABS: { value: Tab; label: string }[] = [
+  { value: "writing", label: "Writing" },
   { value: "grammar", label: "Grammar Check" },
   { value: "rewrite", label: "Rewrite" },
   { value: "paraphrase", label: "Reduce Similarity" },
 ];
 
+const CONTENT_TYPES: { value: ContentType; label: string }[] = [
+  { value: "essay", label: "Essay" },
+  { value: "email", label: "Email" },
+  { value: "application", label: "Application" },
+  { value: "letter", label: "Letter" },
+];
+
+// Sub-type options per content type - only email/application/letter need
+// one (essay doesn't). Matches the *_SUBTYPE_GUIDANCE maps in
+// src/app/api/writing-assistant/route.ts - keep both in sync if you add
+// a new sub-type.
+const SUBTYPES_BY_CONTENT_TYPE: Partial<Record<ContentType, { value: string; label: string }[]>> = {
+  email: [
+    { value: "job", label: "Job / Company Email" },
+    { value: "cover_letter", label: "Cover Letter" },
+    { value: "normal", label: "Normal Email" },
+  ],
+  application: [
+    { value: "job", label: "Job Application" },
+    { value: "leave", label: "Leave Application" },
+    { value: "school", label: "School/College Application" },
+    { value: "general", label: "General" },
+  ],
+  letter: [
+    { value: "formal", label: "Formal Letter (to Authority)" },
+    { value: "personal", label: "Personal Letter" },
+    { value: "complaint", label: "Complaint Letter" },
+  ],
+};
+
+// Dedicated to this page only - independent of the Settings language, which
+// grammar/rewrite/paraphrase below continue to use exactly as before.
+const WRITING_LANGUAGES = [
+  { value: "english", label: "English" },
+  { value: "hindi", label: "Hindi" },
+];
+
 const WORD_COUNTS = [150, 250, 500, 1000];
 const TONES = ["Formal", "Analytical", "Persuasive", "Simple", "Academic"];
 
-function renderAnswer(text: string) {
-  return text.split("\n").map((line, i) => {
-    const trimmed = line.trim();
+// Static theme-token style map — driven entirely by the shared --theme-* CSS
+// variables set on <html data-theme="dark|light">, so this page always mirrors
+// the dashboard toggle exactly with zero extra JS/state.
+const themeStyles = {
+  bg: "var(--theme-bg-main)",
+  color: "var(--theme-text-main)",
+  subText: "var(--theme-text-sub)",
+  mutedText: "var(--theme-text-sub)",
+  cardBg: "var(--theme-card-bg)",
+  cardBorder: "1px solid var(--theme-border)",
+  inputBg: "var(--theme-card-bg)",
+  inputColor: "var(--theme-text-main)",
+  inputBorder: "1px solid var(--theme-border)",
+  tabBorder: "var(--theme-border)",
+};
 
-    if (trimmed.startsWith("# ")) {
-      return (
-        <h2 key={i} style={{ fontSize: "1.35rem", fontWeight: 800, marginTop: i === 0 ? 0 : "20px", marginBottom: "12px" }}>
-          {trimmed.slice(2)}
-        </h2>
-      );
-    }
-    if (trimmed.startsWith("## ")) {
-      return (
-        <h3 key={i} style={{ fontSize: "1.02rem", fontWeight: 700, color: "#F59E0B", marginTop: "18px", marginBottom: "8px" }}>
-          {trimmed.slice(3)}
-        </h3>
-      );
-    }
-    if (trimmed.startsWith("- ")) {
-      return (
-        <div key={i} style={{ display: "flex", gap: "8px", marginBottom: "6px", color: "#CBD5E1", fontSize: ".9rem", lineHeight: 1.6 }}>
-          <span style={{ color: "#F59E0B" }}>•</span>
-          <span>{trimmed.slice(2)}</span>
-        </div>
-      );
-    }
-    if (trimmed === "") {
-      return <div key={i} style={{ height: "8px" }} />;
-    }
-    return (
-      <p key={i} style={{ color: "#CBD5E1", fontSize: ".92rem", lineHeight: 1.75, marginBottom: "10px" }}>
-        {trimmed}
-      </p>
-    );
-  });
-}
+const TEXT_LABEL_BY_CONTENT_TYPE: Record<ContentType, string> = {
+  essay: "Essay Topic",
+  email: "What should this email say?",
+  application: "What should this application say?",
+  letter: "What should this letter say?",
+};
+
+const TEXT_PLACEHOLDER_BY_CONTENT_TYPE: Record<ContentType, string> = {
+  essay: "e.g. Role of Technology in Governance",
+  email: "e.g. Ask HR at Infosys about the status of my job application submitted 2 weeks ago",
+  application: "e.g. 3 days sick leave from 12th to 14th August, addressed to my manager Mr. Sharma",
+  letter: "e.g. Complaint about frequent power cuts in our locality, addressed to the electricity board",
+};
 
 export default function WritingAssistantPage() {
-  const [mode, setMode] = useState<Mode>("essay");
+  const [tab, setTab] = useState<Tab>("writing");
+  const [contentType, setContentType] = useState<ContentType>("essay");
+  const [subType, setSubType] = useState<string>("");
+  const [writingLanguage, setWritingLanguage] = useState("english");
+
   const [text, setText] = useState("");
   const [wordCount, setWordCount] = useState(250);
   const [tone, setTone] = useState("Formal");
@@ -78,12 +108,11 @@ export default function WritingAssistantPage() {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // Response language, pulled from Settings → AI Mentor. Configured centrally
-  // so output language stays consistent across AI features.
+  // Unchanged - still only used for grammar/rewrite/paraphrase, exactly as
+  // before. The new "writing" tab uses its own independent language
+  // dropdown (writingLanguage) instead.
   const [mentorLanguage, setMentorLanguage] = useState("english");
 
-  // Maps the AI Mentor "personality" (set in Settings) to a sensible default tone here,
-  // so Essay/Rewrite start with a tone that matches how the student wants their mentor to sound.
   const PERSONALITY_TO_TONE: Record<string, string> = {
     Friendly: "Simple",
     "Strict Teacher": "Formal",
@@ -93,39 +122,51 @@ export default function WritingAssistantPage() {
   };
 
   useEffect(() => {
+    let cancelled = false;
+
     (async () => {
       try {
         const settings = await settingsService.getSettings();
+        if (cancelled) return;
         setMentorLanguage(settings.ai_mentor.language.toLowerCase());
         const mappedTone = PERSONALITY_TO_TONE[settings.ai_mentor.personality];
         if (mappedTone) setTone(mappedTone);
       } catch {
-        // Settings couldn't be loaded — fall back to the defaults above.
+        // Settings couldn't be loaded — fall back to defaults.
       }
     })();
+
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const needsWordCount = mode === "essay";
-  const needsTone = mode === "essay" || mode === "rewrite";
+  // Whenever the content type changes, reset to that type's first sub-type
+  // (or clear it for essay, which has none) so a stale sub-type from a
+  // previous selection is never silently sent to the API.
+  useEffect(() => {
+    const options = SUBTYPES_BY_CONTENT_TYPE[contentType];
+    setSubType(options ? options[0].value : "");
+  }, [contentType]);
 
-  const textLabel: Record<Mode, string> = {
-    essay: "Essay Topic",
-    grammar: "Paste Your Text",
-    rewrite: "Paste Your Text",
-    paraphrase: "Paste Your Text",
-  };
+  const needsSubType = Boolean(SUBTYPES_BY_CONTENT_TYPE[contentType]);
+  const needsWordCount = tab === "writing" && contentType === "essay";
+  const needsTone = tab === "writing" ? contentType === "essay" : tab === "rewrite";
 
-  const textPlaceholder: Record<Mode, string> = {
-    essay: "e.g. Role of Technology in Governance",
-    grammar: "Paste the text you want checked...",
-    rewrite: "Paste the text you want rewritten...",
-    paraphrase: "Paste the text you want to make more original...",
-  };
+  const textLabel = tab === "writing" ? TEXT_LABEL_BY_CONTENT_TYPE[contentType] : "Paste Your Text";
+  const textPlaceholder =
+    tab === "writing"
+      ? TEXT_PLACEHOLDER_BY_CONTENT_TYPE[contentType]
+      : tab === "grammar"
+      ? "Paste the text you want checked..."
+      : tab === "rewrite"
+      ? "Paste the text you want rewritten..."
+      : "Paste the text you want to make more original...";
 
   async function handleSubmit() {
     if (!text.trim()) {
-      setError(mode === "essay" ? "Please enter an essay topic." : "Please paste some text.");
+      setError(tab === "writing" && contentType === "essay" ? "Please enter an essay topic." : "Please describe what you need.");
       return;
     }
 
@@ -138,11 +179,12 @@ export default function WritingAssistantPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          mode,
+          mode: tab === "writing" ? contentType : tab,
+          subType: tab === "writing" && needsSubType ? subType : undefined,
           text,
           wordCount: needsWordCount ? wordCount : undefined,
           tone: needsTone ? tone : undefined,
-          responseLanguage: mentorLanguage,
+          responseLanguage: tab === "writing" ? writingLanguage : mentorLanguage,
         }),
       });
 
@@ -153,8 +195,8 @@ export default function WritingAssistantPage() {
       }
 
       setAnswer(data.answer);
-    } catch (err: any) {
-      setError(err.message ?? "Something went wrong.");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Something went wrong."));
     } finally {
       setLoading(false);
     }
@@ -170,101 +212,167 @@ export default function WritingAssistantPage() {
     }
   }
 
+  const cardStyle: React.CSSProperties = {
+    background: themeStyles.cardBg,
+    border: themeStyles.cardBorder,
+    borderRadius: "16px",
+    transition: "background 0.3s, border 0.3s",
+    boxSizing: "border-box",
+  };
+
   const inputStyle: React.CSSProperties = {
     width: "100%",
-    background: "#0F172A",
-    border: "1px solid rgba(255,255,255,.08)",
+    background: themeStyles.inputBg,
+    border: themeStyles.inputBorder,
     borderRadius: "10px",
     padding: "11px 14px",
-    color: "white",
+    color: themeStyles.inputColor,
     fontSize: ".9rem",
     outline: "none",
     fontFamily: "inherit",
+    transition: "background 0.3s, color 0.3s, border 0.3s",
+    boxSizing: "border-box",
   };
+
+  const selectStyle: React.CSSProperties = { ...inputStyle, cursor: "pointer" };
 
   const tabBtn = (active: boolean): React.CSSProperties => ({
     padding: "9px 16px",
     borderRadius: "10px",
-    border: active ? "1px solid transparent" : "1px solid rgba(255,255,255,.1)",
+    border: active ? "1px solid transparent" : `1px solid ${themeStyles.tabBorder}`,
     background: active ? G.grad : "transparent",
-    color: active ? "#111827" : "#94A3B8",
+    color: active ? "var(--theme-accent-text)" : themeStyles.subText,
     fontWeight: 700,
     fontSize: ".82rem",
     cursor: "pointer",
+    flex: "1 1 auto",
+    textAlign: "center",
   });
 
   const chipBtn = (active: boolean): React.CSSProperties => ({
     padding: "7px 14px",
     borderRadius: "999px",
-    border: active ? "1px solid transparent" : "1px solid rgba(255,255,255,.1)",
+    border: active ? "1px solid transparent" : `1px solid ${themeStyles.tabBorder}`,
     background: active ? G.grad : "transparent",
-    color: active ? "#111827" : "#94A3B8",
+    color: active ? "var(--theme-accent-text)" : themeStyles.subText,
     fontWeight: 700,
     fontSize: ".78rem",
     cursor: "pointer",
   });
 
+  const fieldLabelStyle: React.CSSProperties = {
+    display: "block",
+    color: themeStyles.subText,
+    fontSize: ".78rem",
+    fontWeight: 600,
+    marginBottom: "6px",
+    textTransform: "uppercase",
+  };
+
   return (
     <div
       style={{
         minHeight: "100vh",
-        background: "#080C14",
-        color: "white",
+        background: themeStyles.bg,
+        color: themeStyles.color,
         fontFamily: "'DM Sans',sans-serif",
-        padding: "32px",
+        padding: "clamp(16px, 4vw, 32px)",
+        transition: "background 0.3s, color 0.3s",
+        boxSizing: "border-box",
       }}
     >
       <div style={{ maxWidth: "800px", margin: "0 auto" }}>
         <header style={{ marginBottom: "22px" }}>
-          <h1 style={{ fontSize: "2rem", fontWeight: 800, marginBottom: "8px" }}>
+          <BackToDashboardLink />
+          <h1 style={{ fontSize: "clamp(1.6rem, 3vw, 2rem)", fontWeight: 800, marginBottom: "8px", color: themeStyles.color }}>
             AI Writing <span style={G.gradText}>Assistant</span>
           </h1>
-          <p style={{ color: "#94A3B8", fontSize: ".95rem" }}>
-            Write essays, fix grammar, rewrite in a different tone, or make your writing more original.
+          <p style={{ color: themeStyles.subText, fontSize: ".95rem" }}>
+            Write essays, emails, applications, and letters, fix grammar, rewrite in a different tone, or make your writing more original.
           </p>
-          <p style={{ color: "#475569", fontSize: ".78rem", marginTop: "8px" }}>
-            Output language: <strong style={{ color: "#94A3B8" }}>{mentorLanguage}</strong> ·{" "}
-            <Link href="/settings" style={{ color: "#F59E0B", textDecoration: "none" }}>
-              Change in Settings
-            </Link>
-          </p>
+          {tab !== "writing" && (
+            <p style={{ color: themeStyles.mutedText, fontSize: ".78rem", marginTop: "8px" }}>
+              Output language: <strong style={{ color: themeStyles.subText }}>{mentorLanguage}</strong> ·{" "}
+              <Link href="/settings" style={{ color: "var(--theme-accent)", textDecoration: "none" }}>
+                Change in Settings
+              </Link>
+            </p>
+          )}
         </header>
 
         <div style={{ display: "flex", gap: "8px", marginBottom: "18px", flexWrap: "wrap" }}>
-          {MODES.map((m) => (
+          {TABS.map((t) => (
             <button
-              key={m.value}
-              style={tabBtn(mode === m.value)}
+              key={t.value}
+              style={tabBtn(tab === t.value)}
               onClick={() => {
-                setMode(m.value);
+                setTab(t.value);
                 setAnswer("");
                 setError(null);
               }}
             >
-              {m.label}
+              {t.label}
             </button>
           ))}
         </div>
 
-        <div style={{ ...G.card, padding: "22px", marginBottom: "20px" }}>
+        <div style={{ ...cardStyle, padding: "22px", marginBottom: "20px" }}>
+          {tab === "writing" && (
+            <div
+              className="writing-type-language-grid"
+              style={{ display: "grid", gridTemplateColumns: needsSubType ? "1fr 1fr 1fr" : "1fr 1fr", gap: "10px", marginBottom: "16px" }}
+            >
+              <div>
+                <label style={fieldLabelStyle}>Content Type</label>
+                <select value={contentType} onChange={(e) => setContentType(e.target.value as ContentType)} style={selectStyle}>
+                  {CONTENT_TYPES.map((c) => (
+                    <option key={c.value} value={c.value} style={{ background: themeStyles.inputBg, color: themeStyles.inputColor }}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {needsSubType && (
+                <div>
+                  <label style={fieldLabelStyle}>This is for</label>
+                  <select value={subType} onChange={(e) => setSubType(e.target.value)} style={selectStyle}>
+                    {SUBTYPES_BY_CONTENT_TYPE[contentType]!.map((s) => (
+                      <option key={s.value} value={s.value} style={{ background: themeStyles.inputBg, color: themeStyles.inputColor }}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label style={fieldLabelStyle}>Language</label>
+                <select value={writingLanguage} onChange={(e) => setWritingLanguage(e.target.value)} style={selectStyle}>
+                  {WRITING_LANGUAGES.map((l) => (
+                    <option key={l.value} value={l.value} style={{ background: themeStyles.inputBg, color: themeStyles.inputColor }}>
+                      {l.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
           <div style={{ marginBottom: "16px" }}>
-            <label style={{ display: "block", color: "#94A3B8", fontSize: ".78rem", fontWeight: 600, marginBottom: "6px", textTransform: "uppercase" }}>
-              {textLabel[mode]}
-            </label>
+            <label style={fieldLabelStyle}>{textLabel}</label>
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
-              rows={mode === "essay" ? 2 : 8}
-              placeholder={textPlaceholder[mode]}
+              rows={tab === "writing" && contentType === "essay" ? 2 : 6}
+              placeholder={textPlaceholder}
               style={{ ...inputStyle, resize: "vertical" }}
             />
           </div>
 
           {needsWordCount && (
             <div style={{ marginBottom: "14px" }}>
-              <label style={{ display: "block", color: "#94A3B8", fontSize: ".78rem", fontWeight: 600, marginBottom: "8px", textTransform: "uppercase" }}>
-                Word Count
-              </label>
+              <label style={fieldLabelStyle}>Word Count</label>
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                 {WORD_COUNTS.map((w) => (
                   <button key={w} style={chipBtn(wordCount === w)} onClick={() => setWordCount(w)}>
@@ -277,9 +385,7 @@ export default function WritingAssistantPage() {
 
           {needsTone && (
             <div style={{ marginBottom: "18px" }}>
-              <label style={{ display: "block", color: "#94A3B8", fontSize: ".78rem", fontWeight: 600, marginBottom: "8px", textTransform: "uppercase" }}>
-                Tone
-              </label>
+              <label style={fieldLabelStyle}>Tone</label>
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                 {TONES.map((t) => (
                   <button key={t} style={chipBtn(tone === t)} onClick={() => setTone(t)}>
@@ -297,7 +403,7 @@ export default function WritingAssistantPage() {
               width: "100%",
               background: G.grad,
               border: "none",
-              color: "#111827",
+              color: "var(--theme-accent-text)",
               padding: "13px",
               borderRadius: "10px",
               cursor: loading ? "not-allowed" : "pointer",
@@ -315,14 +421,14 @@ export default function WritingAssistantPage() {
         </div>
 
         {answer && (
-          <div style={{ ...G.card, padding: "24px" }}>
+          <div style={{ ...cardStyle, padding: "24px" }}>
             <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "10px" }}>
               <button
                 onClick={handleCopy}
                 style={{
                   background: "transparent",
-                  border: "1px solid rgba(255,255,255,.1)",
-                  color: copied ? "#22C55E" : "#94A3B8",
+                  border: `1px solid ${themeStyles.tabBorder}`,
+                  color: copied ? "#22C55E" : themeStyles.subText,
                   fontSize: ".78rem",
                   padding: "6px 14px",
                   borderRadius: "8px",
@@ -332,10 +438,14 @@ export default function WritingAssistantPage() {
                 {copied ? "Copied!" : "Copy"}
               </button>
             </div>
-            {renderAnswer(answer)}
+            {renderMarkdownLite(answer, { textColor: themeStyles.subText })}
           </div>
         )}
       </div>
+
+      <style>{`
+        @media(max-width:600px){.writing-type-language-grid{grid-template-columns:1fr!important}}
+      `}</style>
     </div>
   );
 }

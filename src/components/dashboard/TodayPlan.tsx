@@ -5,17 +5,17 @@ import { G } from "@/constants/colors";
 interface Task {
   id?: string;
   title: string;
-  duration?: number;
-  subject?: string;
   done: boolean;
+  subject?: string;
+  time?: string;
 }
 
 interface TodayPlanProps {
   tasks: Task[];
-  examFallback: string;
+  examFallback?: string;
 }
 
-export default function TodayPlan({ tasks, examFallback }: TodayPlanProps) {
+export default function TodayPlan({ tasks = [], examFallback }: TodayPlanProps) {
   const completedCount = tasks.filter((t) => t.done).length;
 
   return (
@@ -25,83 +25,126 @@ export default function TodayPlan({ tasks, examFallback }: TodayPlanProps) {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: "20px",
+          marginBottom: "18px",
           flexWrap: "wrap",
           gap: "8px",
         }}
       >
-        <h3 style={{ fontSize: "1.15rem", fontWeight: 700 }}>Today's Plan</h3>
-        <span style={{ color: "#64748B", fontSize: ".82rem" }}>
+        <div>
+          <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--theme-text-main, #F8FAFC)" }}>
+            Today's Plan
+          </h3>
+          {examFallback && (
+            <p
+              style={{
+                fontSize: "0.78rem",
+                color: "var(--theme-accent, #F59E0B)",
+                fontWeight: 600,
+                marginTop: "2px",
+              }}
+            >
+              Target Exam: {examFallback}
+            </p>
+          )}
+        </div>
+
+        <span
+          style={{
+            fontSize: "0.78rem",
+            color: "var(--theme-text-sub, #94A3B8)",
+            background: "var(--theme-hover-bg, rgba(255, 255, 255, 0.04))",
+            border: "1px solid var(--theme-border, rgba(255, 255, 255, 0.06))",
+            padding: "4px 12px",
+            borderRadius: "20px",
+            fontWeight: 600,
+          }}
+        >
           {completedCount}/{tasks.length} Completed
         </span>
       </div>
 
       {tasks.length === 0 ? (
-        <p style={{ color: "#64748B", fontSize: ".85rem", textAlign: "center", padding: "20px 0" }}>
-          No tasks planned for today yet.
+        <p
+          style={{
+            color: "var(--theme-muted-text, #64748B)",
+            fontSize: ".85rem",
+            textAlign: "center",
+            padding: "24px 0",
+          }}
+        >
+          No study tasks scheduled for today ({examFallback || "Exam"}).
         </p>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-          {tasks.map((t, i) => (
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          {tasks.map((task, idx) => (
             <div
-              key={t.id ?? i}
+              key={task.id || idx}
               style={{
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
-                gap: "12px",
-                padding: "14px 16px",
+                padding: "12px 14px",
                 borderRadius: "12px",
-                background: "#0F172A",
-                border: "1px solid rgba(255,255,255,.05)",
-                transition: "border-color .15s",
+                background: "var(--theme-hover-bg, rgba(255, 255, 255, 0.03))",
+                border: "1px solid var(--theme-border, rgba(255, 255, 255, 0.05))",
+                transition: "all 0.18s ease",
               }}
-              onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.borderColor = "rgba(245,158,11,.2)")}
-              onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,.05)")}
             >
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <h4
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
+                <div
                   style={{
-                    fontWeight: 600,
-                    marginBottom: "6px",
+                    width: "20px",
+                    height: "20px",
+                    borderRadius: "6px",
+                    border: task.done
+                      ? "none"
+                      : "2px solid var(--theme-muted-text, #64748B)",
+                    background: task.done
+                      ? "var(--theme-accent, #F59E0B)"
+                      : "transparent",
+                    display: "grid",
+                    placeItems: "center",
+                    color: "var(--theme-accent-text, #000000)",
+                    fontSize: "0.75rem",
+                    fontWeight: 800,
+                    flexShrink: 0,
+                  }}
+                >
+                  {task.done && "✓"}
+                </div>
+                <span
+                  style={{
+                    fontSize: "0.88rem",
+                    fontWeight: 500,
+                    color: task.done
+                      ? "var(--theme-muted-text, #64748B)"
+                      : "var(--theme-text-main, #F8FAFC)",
+                    textDecoration: task.done ? "line-through" : "none",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {t.title}
-                </h4>
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "10px",
-                    alignItems: "center",
-                    color: "#64748B",
-                    fontSize: ".8rem",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <span>{t.duration ?? 0} min</span>
-                  <span>•</span>
-                  <span>{t.subject ?? examFallback}</span>
-                </div>
+                  {task.title}
+                </span>
               </div>
 
-              <div
-                style={{
-                  width: "28px",
-                  height: "28px",
-                  borderRadius: "50%",
-                  display: "grid",
-                  placeItems: "center",
-                  background: t.done ? "#22C55E" : "#1E293B",
-                  color: "white",
-                  fontWeight: 700,
-                  flexShrink: 0,
-                }}
-              >
-                {t.done ? "✓" : ""}
-              </div>
+              {task.subject && (
+                <span
+                  style={{
+                    fontSize: "0.72rem",
+                    color: "var(--theme-text-sub, #94A3B8)",
+                    background: "var(--theme-card-bg, #111827)",
+                    border: "1px solid var(--theme-border, rgba(255, 255, 255, 0.05))",
+                    padding: "3px 8px",
+                    borderRadius: "6px",
+                    fontWeight: 500,
+                    flexShrink: 0,
+                  }}
+                >
+                  {task.subject}
+                </span>
+              )}
             </div>
           ))}
         </div>

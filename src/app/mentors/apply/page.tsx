@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { G } from "@/constants/colors";
 import { CATEGORIES } from "@/constants/mentors";
 import { mentorService } from "@/services/mentorService";
 import { MentorApplication, MentorCategory, MentorType } from "@/types/mentor";
+import { Zap, CheckCircle2 } from "lucide-react";
+import BackToDashboardLink from "@/components/common/BackToDashboardLink";
+import { getErrorMessage } from "@/lib/errors";
 
 const MENTOR_TYPES: { value: MentorType; label: string }[] = [
   { value: "online", label: "Online" },
@@ -14,8 +16,8 @@ const MENTOR_TYPES: { value: MentorType; label: string }[] = [
 ];
 
 const STATUS_INFO: Record<string, { color: string; text: string }> = {
-  pending: { color: "#F59E0B", text: "Your application is under review. We'll notify you once it's decided." },
-  approved: { color: "#22C55E", text: "Your application was approved! Your mentor profile is now live." },
+  pending: { color: "#D97706", text: "Your application is under review. We'll notify you once it's decided." },
+  approved: { color: "#059669", text: "Your application was approved! Your mentor profile is now live." },
   rejected: { color: "#EF4444", text: "Your application wasn't approved this time." },
 };
 
@@ -51,6 +53,8 @@ export default function BecomeMentorPage() {
       .finally(() => setCheckingExisting(false));
   }, []);
 
+  const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB — generous for a photo/scan of an ID or certificate
+
   async function handleSubmit() {
     if (!name.trim() || !qualification.trim() || !expertise.trim() || !bio.trim()) {
       setError("Please fill in all required fields.");
@@ -62,6 +66,15 @@ export default function BecomeMentorPage() {
     }
     if (!idProofFile) {
       setError("Please upload a government ID proof.");
+      return;
+    }
+    if (idProofFile.size > MAX_FILE_SIZE_BYTES) {
+      setError(`Your ID proof file is too large (max 5MB). "${idProofFile.name}" is ${(idProofFile.size / (1024 * 1024)).toFixed(1)}MB.`);
+      return;
+    }
+    const oversizedCertificate = certificateFiles.find((f) => f.size > MAX_FILE_SIZE_BYTES);
+    if (oversizedCertificate) {
+      setError(`"${oversizedCertificate.name}" is too large (max 5MB per file). Please compress it or upload a smaller scan.`);
       return;
     }
 
@@ -91,8 +104,8 @@ export default function BecomeMentorPage() {
         certificate_paths: certificatePaths,
       });
       setSubmitted(true);
-    } catch (err: any) {
-      setError(err.message ?? "Could not submit your application.");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Could not submit your application."));
     } finally {
       setSubmitting(false);
       setUploadingDocs(false);
@@ -101,12 +114,12 @@ export default function BecomeMentorPage() {
 
   const inputStyle: React.CSSProperties = {
     width: "100%",
-    background: "#0F172A",
-    border: "1px solid rgba(255,255,255,.08)",
-    borderRadius: "10px",
-    padding: "11px 14px",
-    color: "white",
-    fontSize: ".9rem",
+    background: "var(--theme-card-bg)",
+    border: "1px solid var(--theme-border)",
+    borderRadius: "12px",
+    padding: "12px 14px",
+    color: "var(--theme-text-main)",
+    fontSize: "0.9rem",
     outline: "none",
     fontFamily: "inherit",
     boxSizing: "border-box",
@@ -114,16 +127,27 @@ export default function BecomeMentorPage() {
 
   const labelStyle: React.CSSProperties = {
     display: "block",
-    color: "#94A3B8",
-    fontSize: ".78rem",
-    fontWeight: 600,
+    color: "var(--theme-text-sub)",
+    fontSize: "0.78rem",
+    fontWeight: 700,
     marginBottom: "6px",
     textTransform: "uppercase",
+    letterSpacing: "0.05em",
   };
 
   if (checkingExisting) {
     return (
-      <div style={{ minHeight: "100vh", background: "#080C14", color: "#64748B", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "var(--theme-bg-main)",
+          color: "var(--theme-text-sub)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontFamily: "'Inter', sans-serif",
+        }}
+      >
         Loading...
       </div>
     );
@@ -133,14 +157,53 @@ export default function BecomeMentorPage() {
     const status = existingApplication?.status ?? "pending";
     const info = STATUS_INFO[status];
     return (
-      <div style={{ minHeight: "100vh", background: "#080C14", color: "white", display: "flex", alignItems: "center", justifyContent: "center", padding: "32px" }}>
-        <div style={{ ...G.card, padding: "40px", textAlign: "center", maxWidth: "460px" }}>
-          <div style={{ fontSize: "2.5rem", marginBottom: "16px" }}>{status === "approved" ? "🎉" : status === "rejected" ? "😕" : "⏳"}</div>
-          <h2 style={{ fontSize: "1.3rem", fontWeight: 800, marginBottom: "10px" }}>
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "var(--theme-bg-main)",
+          color: "var(--theme-text-main)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "20px",
+          fontFamily: "'Inter', sans-serif",
+        }}
+      >
+        <div
+          style={{
+            background: "var(--theme-card-bg)",
+            border: "1px solid var(--theme-border)",
+            borderRadius: "24px",
+            padding: "clamp(24px, 5vw, 40px)",
+            textAlign: "center",
+            maxWidth: "460px",
+            width: "100%",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.04)",
+            boxSizing: "border-box",
+          }}
+        >
+          <div style={{ fontSize: "2.5rem", marginBottom: "16px" }}>
+            {status === "approved" ? "🎉" : status === "rejected" ? "😕" : "⏳"}
+          </div>
+          <h2 style={{ fontSize: "1.3rem", fontWeight: 800, marginBottom: "10px", color: "var(--theme-text-main)" }}>
             {submitted ? "Application Submitted!" : "You've Already Applied"}
           </h2>
-          <p style={{ color: info.color, fontSize: ".9rem", marginBottom: "24px", lineHeight: 1.6 }}>{info.text}</p>
-          <Link href="/mentors" style={{ display: "inline-block", background: G.grad, color: "#111827", padding: "12px 24px", borderRadius: "10px", fontWeight: 700, textDecoration: "none" }}>
+          <p style={{ color: info.color, fontSize: "0.9rem", marginBottom: "24px", lineHeight: 1.6, fontWeight: 600 }}>
+            {info.text}
+          </p>
+          <Link
+            href="/mentors"
+            style={{
+              display: "inline-block",
+              background: "var(--theme-accent)",
+              color: "var(--theme-accent-text)",
+              padding: "12px 24px",
+              borderRadius: "14px",
+              fontWeight: 700,
+              textDecoration: "none",
+              boxShadow: "0 4px 14px var(--theme-accent-glow)",
+            }}
+          >
             ← Back to Mentors
           </Link>
         </div>
@@ -149,28 +212,109 @@ export default function BecomeMentorPage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#080C14", color: "white", fontFamily: "'DM Sans',sans-serif", padding: "32px" }}>
-      <div style={{ maxWidth: "700px", margin: "0 auto" }}>
-        <Link href="/mentors" style={{ color: "#64748B", fontSize: ".85rem", textDecoration: "none" }}>
-          ← Back to Mentors
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "var(--theme-bg-main)",
+        color: "var(--theme-text-main)",
+        fontFamily: "'Inter', sans-serif",
+        paddingBottom: "60px",
+        boxSizing: "border-box",
+      }}
+    >
+      {/* Top Navbar */}
+      <nav
+        style={{
+          background: "var(--theme-card-bg)",
+          borderBottom: "1px solid var(--theme-border)",
+          padding: "14px clamp(16px, 4vw, 24px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: "10px",
+          position: "sticky",
+          top: 0,
+          zIndex: 100,
+        }}
+      >
+        <Link
+          href="/"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            textDecoration: "none",
+            color: "var(--theme-text-main)",
+            fontWeight: 800,
+            fontSize: "1.2rem",
+          }}
+        >
+          <div
+            style={{
+              width: "28px",
+              height: "28px",
+              background: "var(--theme-accent)",
+              color: "var(--theme-accent-text)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: "8px",
+              flexShrink: 0,
+            }}
+          >
+            <Zap size={16} style={{ color: "var(--theme-accent-text)" }} />
+          </div>
+          Mentora
         </Link>
+        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+          <Link
+            href="/mentors"
+            style={{ color: "var(--theme-text-sub)", fontSize: "0.85rem", fontWeight: 600, textDecoration: "none" }}
+          >
+            Browse Mentors
+          </Link>
+        </div>
+      </nav>
 
-        <header style={{ margin: "14px 0 22px" }}>
-          <h1 style={{ fontSize: "2rem", fontWeight: 800, marginBottom: "8px" }}>
-            Become a <span style={G.gradText}>Mentor</span>
+      <div style={{ maxWidth: "760px", margin: "32px auto 0 auto", padding: "0 16px", boxSizing: "border-box" }}>
+        <div style={{ marginBottom: "16px" }}>
+          <BackToDashboardLink href="/mentors" label="Back to Mentors" />
+        </div>
+
+        <header style={{ margin: "14px 0 24px" }}>
+          <h1
+            style={{
+              fontSize: "clamp(1.6rem, 4vw, 2rem)",
+              fontWeight: 800,
+              marginBottom: "8px",
+              color: "var(--theme-text-main)",
+              letterSpacing: "-0.02em",
+            }}
+          >
+            Become a <span style={{ color: "var(--theme-accent)" }}>Mentor</span>
           </h1>
-          <p style={{ color: "#94A3B8", fontSize: ".95rem" }}>
+          <p style={{ color: "var(--theme-text-sub)", fontSize: "0.95rem", fontWeight: 500 }}>
             Share your expertise and help students on Mentora. Applications are reviewed manually.
           </p>
         </header>
 
-        <div style={{ ...G.card, padding: "24px" }}>
-          <div style={{ marginBottom: "16px" }}>
+        <div
+          style={{
+            background: "var(--theme-card-bg)",
+            border: "1px solid var(--theme-border)",
+            borderRadius: "24px",
+            padding: "clamp(20px, 4vw, 36px)",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.04)",
+            boxSizing: "border-box",
+          }}
+        >
+          <div style={{ marginBottom: "20px" }}>
             <label style={labelStyle}>Full Name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. John Doe" style={inputStyle} />
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px", marginBottom: "20px" }}>
             <div>
               <label style={labelStyle}>Category</label>
               <select value={category} onChange={(e) => setCategory(e.target.value as MentorCategory)} style={inputStyle}>
@@ -193,12 +337,12 @@ export default function BecomeMentorPage() {
             </div>
           </div>
 
-          <div style={{ marginBottom: "16px" }}>
+          <div style={{ marginBottom: "20px" }}>
             <label style={labelStyle}>Qualification</label>
             <input value={qualification} onChange={(e) => setQualification(e.target.value)} placeholder="e.g. M.Sc Physics, IIT Delhi" style={inputStyle} />
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px", marginBottom: "20px" }}>
             <div>
               <label style={labelStyle}>Years of Experience</label>
               <input type="number" min={0} value={experienceYears} onChange={(e) => setExperienceYears(Number(e.target.value))} style={inputStyle} />
@@ -209,49 +353,55 @@ export default function BecomeMentorPage() {
             </div>
           </div>
 
-          <div style={{ marginBottom: "16px" }}>
+          <div style={{ marginBottom: "20px" }}>
             <label style={labelStyle}>Expertise (comma-separated)</label>
             <input value={expertise} onChange={(e) => setExpertise(e.target.value)} placeholder="e.g. UPSC, Polity, Governance" style={inputStyle} />
           </div>
 
-          <div style={{ marginBottom: "16px" }}>
+          <div style={{ marginBottom: "20px" }}>
             <label style={labelStyle}>Languages (comma-separated)</label>
             <input value={languages} onChange={(e) => setLanguages(e.target.value)} placeholder="e.g. Hindi, English" style={inputStyle} />
           </div>
 
           {mentorType !== "online" && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "16px", marginBottom: "16px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px", marginBottom: "20px" }}>
               <div>
                 <label style={labelStyle}>City</label>
-                <input value={city} onChange={(e) => setCity(e.target.value)} style={inputStyle} />
+                <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. New Delhi" style={inputStyle} />
               </div>
               <div>
                 <label style={labelStyle}>Address</label>
-                <input value={address} onChange={(e) => setAddress(e.target.value)} style={inputStyle} />
+                <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="e.g. Connaught Place" style={inputStyle} />
               </div>
             </div>
           )}
 
-          <div style={{ marginBottom: "20px" }}>
+          <div style={{ marginBottom: "24px" }}>
             <label style={labelStyle}>Bio</label>
             <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={4} placeholder="Tell students about yourself and your teaching style..." style={{ ...inputStyle, resize: "vertical" }} />
           </div>
 
-          <div style={{ borderTop: "1px solid rgba(255,255,255,.06)", paddingTop: "20px", marginBottom: "20px" }}>
-            <h3 style={{ fontWeight: 700, marginBottom: "6px" }}>Verification Documents</h3>
-            <p style={{ color: "#64748B", fontSize: ".78rem", marginBottom: "16px" }}>
+          <div style={{ borderTop: "1px solid var(--theme-border)", paddingTop: "24px", marginBottom: "24px" }}>
+            <h3 style={{ fontSize: "1.05rem", fontWeight: 800, marginBottom: "6px", color: "var(--theme-text-main)" }}>
+              Verification Documents
+            </h3>
+            <p style={{ color: "var(--theme-text-sub)", fontSize: "0.8rem", marginBottom: "16px", fontWeight: 500 }}>
               Kept private — only used to verify your identity and qualifications for approval.
             </p>
 
             <div style={{ marginBottom: "16px" }}>
-              <label style={labelStyle}>Government ID Proof (Aadhaar / PAN / Passport, etc.)</label>
+              <label style={labelStyle}>Government ID Proof (PAN / Passport, etc.)</label>
               <input
                 type="file"
                 accept="image/*,.pdf"
                 onChange={(e) => setIdProofFile(e.target.files?.[0] ?? null)}
-                style={{ ...inputStyle, padding: "8px 14px" }}
+                style={{ ...inputStyle, padding: "10px 14px", cursor: "pointer" }}
               />
-              {idProofFile && <p style={{ color: "#22C55E", fontSize: ".78rem", marginTop: "6px" }}>✓ {idProofFile.name}</p>}
+              {idProofFile && (
+                <p style={{ color: "#059669", fontSize: "0.8rem", marginTop: "6px", fontWeight: 600 }}>
+                  ✓ {idProofFile.name}
+                </p>
+              )}
             </div>
 
             <div>
@@ -261,38 +411,38 @@ export default function BecomeMentorPage() {
                 accept="image/*,.pdf"
                 multiple
                 onChange={(e) => setCertificateFiles(e.target.files ? Array.from(e.target.files) : [])}
-                style={{ ...inputStyle, padding: "8px 14px" }}
+                style={{ ...inputStyle, padding: "10px 14px", cursor: "pointer" }}
               />
               {certificateFiles.length > 0 && (
-                <p style={{ color: "#22C55E", fontSize: ".78rem", marginTop: "6px" }}>
+                <p style={{ color: "#059669", fontSize: "0.8rem", marginTop: "6px", fontWeight: 600 }}>
                   ✓ {certificateFiles.length} file{certificateFiles.length !== 1 ? "s" : ""} selected: {certificateFiles.map((f) => f.name).join(", ")}
                 </p>
               )}
             </div>
           </div>
 
-          {error && <p style={{ color: "#EF4444", fontSize: ".85rem", marginBottom: "16px" }}>{error}</p>}
+          {error && <p style={{ color: "#EF4444", fontSize: "0.88rem", marginBottom: "16px", fontWeight: 600 }}>⚠️ {error}</p>}
 
           <button
             onClick={handleSubmit}
             disabled={submitting}
             style={{
               width: "100%",
-              background: G.grad,
+              background: "var(--theme-accent)",
               border: "none",
-              color: "#111827",
-              padding: "13px",
-              borderRadius: "10px",
-              fontWeight: 700,
-              fontSize: ".95rem",
+              color: "var(--theme-accent-text)",
+              padding: "14px",
+              borderRadius: "14px",
+              fontWeight: 800,
+              fontSize: "0.95rem",
               cursor: submitting ? "not-allowed" : "pointer",
               opacity: submitting ? 0.7 : 1,
+              boxShadow: "0 4px 16px var(--theme-accent-glow)",
             }}
           >
             {uploadingDocs ? "Uploading documents..." : submitting ? "Submitting..." : "Submit Application"}
           </button>
         </div>
-
       </div>
     </div>
   );

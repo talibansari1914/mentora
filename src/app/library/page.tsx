@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { G } from "@/constants/colors";
 import { EXAMS, TYPES } from "@/constants/library";
 import { libraryService } from "@/services/libraryService";
 import { bookService } from "@/services/bookService";
+import BackToDashboardLink from "@/components/common/BackToDashboardLink";
 import { authService } from "@/services/authService";
 import { LibraryProgress, Book } from "@/types/book";
 
@@ -13,9 +13,9 @@ import LibrarySearchBar from "@/components/library/LibrarySearchBar";
 import CategoryGrid from "@/components/library/CategoryGrid";
 import BookSection from "@/components/library/BookSection";
 import BookCard from "@/components/library/BookCard";
+import { getErrorMessage } from "@/lib/errors";
 
 // Converts a downloads string like "120K" into a plain number for sorting.
-// (Kept here since it's only needed for the "Trending" sort, nowhere else.)
 function parseDownloads(value: string): number {
   const num = parseFloat(value);
   if (value.toUpperCase().includes("M")) return num * 1_000_000;
@@ -35,6 +35,8 @@ export default function LibraryPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+
     (async () => {
       try {
         const [progressRows, profile, allBooks] = await Promise.all([
@@ -42,18 +44,21 @@ export default function LibraryPage() {
           authService.getProfile(),
           bookService.getAllBooks(),
         ]);
+        if (cancelled) return;
         setProgress(progressRows);
         setBooks(allBooks);
         if (profile?.exam) setUserExam(profile.exam);
-      } catch (err: any) {
-        // Not fatal for progress/profile — but if the books table itself
-        // failed to load, surface it since the whole page depends on it.
-        console.error("Library data load error:", err?.message ?? err?.code ?? err);
-        setLoadError(err?.message ?? "Could not load the book catalog.");
+      } catch (err: unknown) {
+        console.error("Library data load error:", getErrorMessage(err, "unknown error"));
+        if (!cancelled) setLoadError(getErrorMessage(err, "Could not load the book catalog."));
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const favorites = useMemo(() => progress.filter((p) => p.is_favorite).map((p) => Number(p.book_id)), [progress]);
@@ -62,7 +67,6 @@ export default function LibraryPage() {
   async function handleToggleFavorite(bookId: number) {
     const isCurrentlyFavorite = favorites.includes(bookId);
 
-    // Optimistic update so the UI feels instant, then sync to Supabase.
     setProgress((prev) => {
       const existing = prev.find((p) => Number(p.book_id) === bookId);
       if (existing) {
@@ -85,7 +89,7 @@ export default function LibraryPage() {
     try {
       await libraryService.toggleFavorite(String(bookId), !isCurrentlyFavorite);
     } catch (err) {
-      console.error("Could not save favorite:", (err as any)?.message ?? err);
+      console.error("Could not save favorite:", getErrorMessage(err));
     }
   }
 
@@ -114,11 +118,10 @@ export default function LibraryPage() {
     try {
       await libraryService.toggleWishlist(String(bookId), !isCurrentlyWishlisted);
     } catch (err) {
-      console.error("Could not save wishlist:", (err as any)?.message ?? err);
+      console.error("Could not save wishlist:", getErrorMessage(err));
     }
   }
 
-  // ── Continue Reading: books with saved progress, most recently opened first ──
   const continueReadingBooks = useMemo(() => {
     const inProgress = progress.filter((p) => p.progress_percent > 0 && p.progress_percent < 100);
     return inProgress
@@ -134,22 +137,18 @@ export default function LibraryPage() {
     return map;
   }, [progress]);
 
-  // ── Recommended: same exam as the student's profile, highest rated first ──
   const recommendedBooks = useMemo(
     () => books.filter((b) => b.exam === userExam).sort((a, b) => b.rating - a.rating).slice(0, 8),
     [userExam, books]
   );
 
-  // ── Trending: highest download count ──
   const trendingBooks = useMemo(
     () => [...books].sort((a, b) => parseDownloads(b.downloads) - parseDownloads(a.downloads)).slice(0, 8),
     [books]
   );
 
-  // ── New Arrivals ──
   const newArrivals = useMemo(() => books.filter((b) => b.isNew), [books]);
 
-  // ── Main filtered grid (search + exam + type) ──
   const filtered = useMemo(() => {
     return books.filter((b) => {
       const matchSearch =
@@ -163,50 +162,79 @@ export default function LibraryPage() {
 
   const categoryExams = EXAMS.filter((e) => e !== "All");
 
+  // UI now reads directly from the global CSS variables (globals.css) that
+  // the dashboard's ThemeToggle sets via data-theme on <html>. No local
+  // isDark state, no localStorage polling, no interval, and — importantly —
+  // no more "force override child component colors via inline-style string
+  // matching" hack. That hack existed because child components (BookCard,
+  // BookSection, CategoryGrid, LibrarySearchBar, etc.) used to hardcode
+  // light-only colors; now that they read the same CSS variables directly,
+  // there's nothing left for that override to patch, so it's removed.
+  const themeStyles = {
+    bg: "var(--theme-bg-main, #080C14)",
+    color: "var(--theme-text-main, #F8FAFC)",
+    headerBg: "var(--theme-card-bg, rgba(8, 12, 20, 0.92))",
+    headerBorder: "var(--theme-border, rgba(255, 255, 255, 0.08))",
+    cardBg: "var(--theme-card-bg, #111827)",
+    cardBorder: "1px solid var(--theme-border, rgba(255, 255, 255, 0.08))",
+    subText: "var(--theme-text-sub, #94A3B8)",
+    inactiveBtnBg: "var(--theme-card-bg, #111827)",
+    inactiveBtnBorder: "1px solid var(--theme-border, rgba(255, 255, 255, 0.08))",
+    inactiveBtnColor: "var(--theme-text-sub, #94A3B8)",
+  };
+
   return (
-    <div style={{ minHeight: "100vh", background: "#080C14", color: "white", fontFamily: "'DM Sans',sans-serif" }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        background: themeStyles.bg,
+        color: themeStyles.color,
+        fontFamily: "'DM Sans', sans-serif",
+        transition: "background 0.3s, color 0.3s",
+      }}
+    >
       {/* Header */}
       <header
         style={{
           position: "sticky",
           top: 0,
           zIndex: 50,
-          background: "rgba(8,12,20,0.92)",
+          background: themeStyles.headerBg,
           backdropFilter: "blur(20px)",
-          borderBottom: "1px solid rgba(255,255,255,0.07)",
+          borderBottom: `1px solid ${themeStyles.headerBorder}`,
           padding: "16px 32px",
+          transition: "background 0.3s, border-color 0.3s",
         }}
       >
-        <div style={{ maxWidth: "1280px", margin: "0 auto", display: "flex", alignItems: "center", gap: "24px" }}>
+        <div style={{ maxWidth: "1280px", margin: "0 auto", display: "flex", alignItems: "center", gap: "24px", flexWrap: "wrap" }}>
           <Link href="/dashboard" style={{ display: "inline-flex", alignItems: "center", gap: "9px", textDecoration: "none" }}>
             <div
               style={{
                 width: "32px",
                 height: "32px",
                 borderRadius: "8px",
-                background: G.grad,
+                background: "#F59E0B",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 fontWeight: 800,
-                color: "#111827",
+                color: "#0F172A",
+                boxShadow: "0 2px 4px rgba(245, 158, 11, 0.2)",
               }}
             >
               M
             </div>
-            <span style={{ fontWeight: 800, fontSize: "1.2rem", color: "white" }}>
-              Mentor<span style={{ color: "#F59E0B" }}>a</span>
+            <span style={{ fontWeight: 800, fontSize: "1.2rem", color: themeStyles.color }}>
+              Mentor<span style={{ color: "var(--theme-accent, #D97706)" }}>a</span>
             </span>
           </Link>
-          <Link href="/dashboard" style={{ fontSize: "0.85rem", color: "#64748B", textDecoration: "none" }}>
-            ← Back to Dashboard
-          </Link>
+          <BackToDashboardLink inline />
           <Link
             href="/library/personal"
             style={{
               marginLeft: "auto",
               fontSize: "0.85rem",
-              color: "#F59E0B",
+              color: "var(--theme-accent, #D97706)",
               textDecoration: "none",
               fontWeight: 700,
             }}
@@ -217,7 +245,7 @@ export default function LibraryPage() {
             href="/library/ai-tools"
             style={{
               fontSize: "0.85rem",
-              color: "#F59E0B",
+              color: "var(--theme-accent, #D97706)",
               textDecoration: "none",
               fontWeight: 700,
             }}
@@ -229,8 +257,8 @@ export default function LibraryPage() {
 
       <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "36px 32px 60px" }}>
         <div style={{ marginBottom: "28px" }}>
-          <h1 style={{ fontSize: "1.9rem", fontWeight: 800, marginBottom: "6px" }}>Digital Library</h1>
-          <p style={{ color: "#64748B", fontSize: "0.9rem" }}>
+          <h1 style={{ fontSize: "1.9rem", fontWeight: 800, marginBottom: "6px", color: themeStyles.color }}>Digital Library</h1>
+          <p style={{ color: themeStyles.subText, fontSize: "0.9rem", fontWeight: 500 }}>
             {books.length}+ books, notes, PYQs and magazines — all in one place.
           </p>
         </div>
@@ -238,7 +266,7 @@ export default function LibraryPage() {
         <LibrarySearchBar value={search} onChange={setSearch} />
 
         {loadError && (
-          <p style={{ color: "#EF4444", fontSize: ".85rem", marginBottom: "16px" }}>{loadError}</p>
+          <p style={{ color: "#DC2626", fontSize: "0.85rem", marginBottom: "16px", fontWeight: 600 }}>{loadError}</p>
         )}
 
         {!loading && (
@@ -286,9 +314,9 @@ export default function LibraryPage() {
         )}
 
         {/* Full filterable grid */}
-        <section>
+        <section style={{ marginTop: "40px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-            <h2 style={{ fontSize: "1.15rem", fontWeight: 800 }}>All Resources</h2>
+            <h2 style={{ fontSize: "1.15rem", fontWeight: 800, color: themeStyles.color }}>All Resources</h2>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "24px" }}>
@@ -303,9 +331,11 @@ export default function LibraryPage() {
                     fontSize: "0.82rem",
                     fontWeight: 600,
                     cursor: "pointer",
-                    border: examFilter === ex ? "1px solid transparent" : "1px solid rgba(255,255,255,0.08)",
-                    background: examFilter === ex ? G.grad : "#111827",
-                    color: examFilter === ex ? "#111827" : "#94A3B8",
+                    border: examFilter === ex ? "1px solid transparent" : themeStyles.inactiveBtnBorder,
+                    background: examFilter === ex ? "var(--theme-accent, #F59E0B)" : themeStyles.inactiveBtnBg,
+                    color: examFilter === ex ? "var(--theme-accent-text, #080C14)" : themeStyles.inactiveBtnColor,
+                    boxShadow: examFilter === ex ? "0 2px 4px var(--theme-accent-glow, rgba(245, 158, 11, 0.2))" : "0 1px 2px rgba(0,0,0,0.02)",
+                    transition: "all 0.2s",
                   }}
                 >
                   {ex}
@@ -321,11 +351,13 @@ export default function LibraryPage() {
                     padding: "6px 14px",
                     borderRadius: "8px",
                     fontSize: "0.78rem",
-                    fontWeight: 500,
+                    fontWeight: 600,
                     cursor: "pointer",
-                    border: typeFilter === t ? "1px solid rgba(245,158,11,0.4)" : "1px solid rgba(255,255,255,0.06)",
-                    background: typeFilter === t ? "rgba(245,158,11,0.1)" : "transparent",
-                    color: typeFilter === t ? "#F59E0B" : "#64748B",
+                    border: typeFilter === t ? "1px solid var(--theme-accent-border, rgba(245,158,11,0.5))" : themeStyles.inactiveBtnBorder,
+                    background: typeFilter === t ? "var(--theme-accent-soft, rgba(245,158,11,0.1))" : themeStyles.inactiveBtnBg,
+                    color: typeFilter === t ? "var(--theme-accent, #D97706)" : themeStyles.inactiveBtnColor,
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+                    transition: "all 0.2s",
                   }}
                 >
                   {t}
@@ -334,8 +366,8 @@ export default function LibraryPage() {
             </div>
           </div>
 
-          <p style={{ fontSize: "0.82rem", color: "#64748B", marginBottom: "18px" }}>
-            Showing <strong style={{ color: "#CBD5E1" }}>{filtered.length}</strong> result
+          <p style={{ fontSize: "0.82rem", color: themeStyles.subText, marginBottom: "18px", fontWeight: 600 }}>
+            Showing <strong style={{ color: themeStyles.color }}>{filtered.length}</strong> result
             {filtered.length !== 1 ? "s" : ""}
           </p>
 
@@ -354,10 +386,18 @@ export default function LibraryPage() {
               ))}
             </div>
           ) : (
-            <div style={{ textAlign: "center", padding: "80px 20px" }}>
+            <div
+              style={{
+                textAlign: "center",
+                padding: "80px 20px",
+                background: themeStyles.cardBg,
+                border: themeStyles.cardBorder,
+                borderRadius: "16px",
+              }}
+            >
               <div style={{ fontSize: "3rem", marginBottom: "16px" }}>🔍</div>
-              <h3 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: "8px" }}>No results found</h3>
-              <p style={{ color: "#64748B", fontSize: "0.875rem" }}>Try adjusting your search or filters.</p>
+              <h3 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: "8px", color: themeStyles.color }}>No results found</h3>
+              <p style={{ color: themeStyles.subText, fontSize: "0.875rem", fontWeight: 500 }}>Try adjusting your search or filters.</p>
             </div>
           )}
         </section>

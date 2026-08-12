@@ -3,20 +3,23 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { testService } from "@/services/testService";
+import { gradAmber, gradTextAmber } from "@/lib/theme";
+import BackToDashboardLink from "@/components/common/BackToDashboardLink";
+import { getErrorMessage } from "@/lib/errors";
 
-const G = {
-  grad: "linear-gradient(135deg,#F59E0B,#FBBF24)",
-  gradText: {
-    background: "linear-gradient(135deg,#F59E0B,#FBBF24)",
-    WebkitBackgroundClip: "text",
-    WebkitTextFillColor: "transparent",
-  },
-  card: {
-    background: "#0B1220",
-    border: "1px solid rgba(255,255,255,.06)",
-    borderRadius: "16px",
-  },
-};
+const G = { grad: gradAmber, gradText: gradTextAmber };
+
+interface AnalyticsThemeStyles {
+  bg: string;
+  color: string;
+  subText: string;
+  mutedText: string;
+  cardBg: string;
+  cardBorder: string;
+  selectBg: string;
+  selectBorder: string;
+  donutTrack: string;
+}
 
 const EXAMS = [
   { value: "", label: "All Exams" },
@@ -54,13 +57,13 @@ interface Summary {
   totalSkipped: number;
 }
 
-function StatCard({ label, value, color }: { label: string; value: string | number; color?: string }) {
+function StatCard({ label, value, color, themeStyles }: { label: string; value: string | number; color?: string; themeStyles: AnalyticsThemeStyles }) {
   return (
-    <div style={{ ...G.card, padding: "18px" }}>
-      <p style={{ color: "#64748B", fontSize: ".75rem", fontWeight: 600, textTransform: "uppercase", marginBottom: "6px" }}>
+    <div style={{ background: themeStyles.cardBg, border: themeStyles.cardBorder, borderRadius: "16px", padding: "18px", transition: "background 0.3s, border 0.3s", boxSizing: "border-box" }}>
+      <p style={{ color: themeStyles.subText, fontSize: ".75rem", fontWeight: 600, textTransform: "uppercase", marginBottom: "6px" }}>
         {label}
       </p>
-      <p style={{ fontSize: "1.6rem", fontWeight: 800, color: color ?? "white" }}>{value}</p>
+      <p style={{ fontSize: "1.6rem", fontWeight: 800, color: color ?? themeStyles.color }}>{value}</p>
     </div>
   );
 }
@@ -72,12 +75,14 @@ function DonutStat({
   max,
   color,
   suffix = "",
+  themeStyles,
 }: {
   label: string;
   value: number;
   max: number;
   color: string;
   suffix?: string;
+  themeStyles: AnalyticsThemeStyles;
 }) {
   const size = 140;
   const stroke = 14;
@@ -87,10 +92,10 @@ function DonutStat({
   const dash = circumference * pct;
 
   return (
-    <div style={{ ...G.card, padding: "20px", display: "flex", flexDirection: "column", alignItems: "center" }}>
+    <div style={{ background: themeStyles.cardBg, border: themeStyles.cardBorder, borderRadius: "16px", padding: "20px", display: "flex", flexDirection: "column", alignItems: "center", transition: "background 0.3s, border 0.3s", boxSizing: "border-box" }}>
       <div style={{ position: "relative", width: size, height: size }}>
         <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
-          <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="rgba(255,255,255,.06)" strokeWidth={stroke} />
+          <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={themeStyles.donutTrack} strokeWidth={stroke} />
           <circle
             cx={size / 2}
             cy={size / 2}
@@ -111,14 +116,14 @@ function DonutStat({
             justifyContent: "center",
           }}
         >
-          <p style={{ fontSize: "1.5rem", fontWeight: 800 }}>
+          <p style={{ fontSize: "1.5rem", fontWeight: 800, color: themeStyles.color }}>
             {Math.round(value)}
             {suffix}
           </p>
         </div>
       </div>
-      <p style={{ color: "#94A3B8", fontSize: ".8rem", fontWeight: 600, marginTop: "10px" }}>{label}</p>
-      <p style={{ color: "#64748B", fontSize: ".72rem" }}>
+      <p style={{ color: themeStyles.color, fontSize: ".8rem", fontWeight: 600, marginTop: "10px" }}>{label}</p>
+      <p style={{ color: themeStyles.subText, fontSize: ".72rem" }}>
         {Math.round(value)} out of {max}
       </p>
     </div>
@@ -126,10 +131,10 @@ function DonutStat({
 }
 
 // Rounded pill-shaped vertical bar chart — subject-wise accuracy comparison
-function PillBarChart({ data }: { data: SubjectPoint[] }) {
+function PillBarChart({ data, themeStyles }: { data: SubjectPoint[]; themeStyles: AnalyticsThemeStyles }) {
   if (data.length === 0) {
     return (
-      <p style={{ color: "#64748B", fontSize: ".85rem", textAlign: "center", padding: "30px 0" }}>
+      <p style={{ color: themeStyles.subText, fontSize: ".85rem", textAlign: "center", padding: "30px 0" }}>
         No subject data yet.
       </p>
     );
@@ -138,20 +143,20 @@ function PillBarChart({ data }: { data: SubjectPoint[] }) {
   const trackHeight = 130;
 
   return (
-    <div style={{ display: "flex", alignItems: "flex-end", gap: "18px", height: `${trackHeight + 30}px` }}>
+    <div style={{ display: "flex", alignItems: "flex-end", gap: "18px", height: `${trackHeight + 30}px`, overflowX: "auto", paddingBottom: "5px" }}>
       {data.map((s) => {
         const pct = Math.max(Math.round(s.averageAccuracy), 4);
         const filledHeight = (pct / 100) * trackHeight;
         const color = pct >= 70 ? "#22C55E" : pct >= 50 ? "#F59E0B" : "#EF4444";
 
         return (
-          <div key={s.subject} style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: 1 }}>
+          <div key={s.subject} style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: 1, minWidth: "40px" }}>
             <div
               style={{
                 position: "relative",
                 width: "22px",
                 height: `${trackHeight}px`,
-                background: "rgba(255,255,255,.06)",
+                background: themeStyles.donutTrack,
                 borderRadius: "999px",
                 display: "flex",
                 alignItems: "flex-end",
@@ -171,7 +176,7 @@ function PillBarChart({ data }: { data: SubjectPoint[] }) {
               style={{
                 marginTop: "8px",
                 fontSize: ".72rem",
-                color: "#94A3B8",
+                color: themeStyles.subText,
                 textAlign: "center",
                 maxWidth: "60px",
                 lineHeight: 1.2,
@@ -187,10 +192,10 @@ function PillBarChart({ data }: { data: SubjectPoint[] }) {
 }
 
 // Dual-line trend chart — Score vs Accuracy over recent tests
-function TrendLineChart({ data }: { data: WeeklyPoint[] }) {
+function TrendLineChart({ data, themeStyles }: { data: WeeklyPoint[]; themeStyles: AnalyticsThemeStyles }) {
   if (data.length < 2) {
     return (
-      <p style={{ color: "#64748B", fontSize: ".85rem", textAlign: "center", padding: "30px 0" }}>
+      <p style={{ color: themeStyles.subText, fontSize: ".85rem", textAlign: "center", padding: "30px 0" }}>
         Need at least 2 days of test data to show a trend.
       </p>
     );
@@ -220,7 +225,7 @@ function TrendLineChart({ data }: { data: WeeklyPoint[] }) {
             x2={width}
             y1={height * f}
             y2={height * f}
-            stroke="rgba(255,255,255,.06)"
+            stroke={themeStyles.donutTrack}
             strokeWidth={0.3}
           />
         ))}
@@ -241,7 +246,7 @@ function TrendLineChart({ data }: { data: WeeklyPoint[] }) {
             x={i * stepX}
             y={height + 8}
             fontSize={2.6}
-            fill="#64748B"
+            fill={themeStyles.subText}
             textAnchor="middle"
           >
             {d.date.slice(5)}
@@ -249,19 +254,34 @@ function TrendLineChart({ data }: { data: WeeklyPoint[] }) {
         ))}
       </svg>
 
-      <div style={{ display: "flex", gap: "20px", marginTop: "12px", justifyContent: "center" }}>
+      <div style={{ display: "flex", gap: "20px", marginTop: "12px", justifyContent: "center", flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#F59E0B", display: "inline-block" }} />
-          <span style={{ fontSize: ".78rem", color: "#94A3B8" }}>Accuracy</span>
+          <span style={{ fontSize: ".78rem", color: themeStyles.subText }}>Accuracy</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#38BDF8", display: "inline-block" }} />
-          <span style={{ fontSize: ".78rem", color: "#94A3B8" }}>Score</span>
+          <span style={{ fontSize: ".78rem", color: themeStyles.subText }}>Score</span>
         </div>
       </div>
     </div>
   );
 }
+
+// Static theme-token style map — driven entirely by the shared --theme-* CSS
+// variables set on <html data-theme="dark|light">, so this page always mirrors
+// the dashboard toggle exactly with zero extra JS/state.
+const themeStyles = {
+  bg: "var(--theme-bg-main)",
+  color: "var(--theme-text-main)",
+  subText: "var(--theme-text-sub)",
+  mutedText: "var(--theme-text-sub)",
+  cardBg: "var(--theme-card-bg)",
+  cardBorder: "1px solid var(--theme-border)",
+  selectBg: "var(--theme-card-bg)",
+  selectBorder: "1px solid var(--theme-border)",
+  donutTrack: "var(--theme-border)",
+};
 
 export default function AnalyticsPage() {
   const [exam, setExam] = useState("");
@@ -290,8 +310,8 @@ export default function AnalyticsPage() {
           setWeekly(weeklyData);
           setSubjects(subjectData);
         }
-      } catch (err: any) {
-        if (!cancelled) setError(err.message ?? "Could not load analytics.");
+      } catch (err: unknown) {
+        if (!cancelled) setError(getErrorMessage(err, "Could not load analytics."));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -313,14 +333,24 @@ export default function AnalyticsPage() {
 
   const recentWeekly = weekly.slice(-7);
 
+  const cardStyle: React.CSSProperties = {
+    background: themeStyles.cardBg,
+    border: themeStyles.cardBorder,
+    borderRadius: "16px",
+    transition: "background 0.3s, border 0.3s",
+    boxSizing: "border-box",
+  };
+
   return (
     <div
       style={{
         minHeight: "100vh",
-        background: "#080C14",
-        color: "white",
+        background: themeStyles.bg,
+        color: themeStyles.color,
         fontFamily: "'DM Sans',sans-serif",
-        padding: "32px",
+        padding: "clamp(16px, 4vw, 32px)",
+        transition: "background 0.3s, color 0.3s",
+        boxSizing: "border-box",
       }}
     >
       <div style={{ maxWidth: "900px", margin: "0 auto" }}>
@@ -335,10 +365,11 @@ export default function AnalyticsPage() {
           }}
         >
           <div>
-            <h1 style={{ fontSize: "2rem", fontWeight: 800, marginBottom: "8px" }}>
+            <BackToDashboardLink />
+            <h1 style={{ fontSize: "clamp(1.6rem, 3vw, 2rem)", fontWeight: 800, marginBottom: "8px", color: themeStyles.color }}>
               Performance <span style={G.gradText}>Analysis</span>
             </h1>
-            <p style={{ color: "#94A3B8", fontSize: ".95rem" }}>
+            <p style={{ color: themeStyles.subText, fontSize: ".95rem" }}>
               Track your accuracy, scores, and subject-wise strengths over time.
             </p>
           </div>
@@ -347,17 +378,18 @@ export default function AnalyticsPage() {
             value={exam}
             onChange={(e) => setExam(e.target.value)}
             style={{
-              background: "#0F172A",
-              border: "1px solid rgba(255,255,255,.08)",
+              background: themeStyles.selectBg,
+              border: themeStyles.selectBorder,
               borderRadius: "10px",
               padding: "10px 14px",
-              color: "white",
+              color: themeStyles.color,
               fontSize: ".85rem",
               outline: "none",
+              transition: "background 0.3s, color 0.3s, border 0.3s",
             }}
           >
             {EXAMS.map((e) => (
-              <option key={e.value} value={e.value}>
+              <option key={e.value} value={e.value} style={{ background: themeStyles.selectBg, color: themeStyles.color }}>
                 {e.label}
               </option>
             ))}
@@ -371,9 +403,9 @@ export default function AnalyticsPage() {
             marginBottom: "20px",
             padding: "10px 18px",
             borderRadius: "10px",
-            border: "1px solid rgba(245,158,11,.25)",
-            background: "rgba(245,158,11,.08)",
-            color: "#F59E0B",
+            border: "1px solid var(--theme-accent-border)",
+            background: "var(--theme-accent-soft)",
+            color: "var(--theme-accent)",
             fontSize: ".85rem",
             fontWeight: 700,
             textDecoration: "none",
@@ -387,9 +419,9 @@ export default function AnalyticsPage() {
         )}
 
         {loading ? (
-          <p style={{ color: "#64748B", fontSize: ".85rem" }}>Loading analytics...</p>
+          <p style={{ color: themeStyles.subText, fontSize: ".85rem" }}>Loading analytics...</p>
         ) : !summary || summary.totalTests === 0 ? (
-          <div style={{ ...G.card, padding: "40px", textAlign: "center", color: "#64748B" }}>
+          <div style={{ ...cardStyle, padding: "40px", textAlign: "center", color: themeStyles.subText }}>
             No test data yet. Attempt a mock test or daily practice to see your analytics here.
           </div>
         ) : (
@@ -408,6 +440,7 @@ export default function AnalyticsPage() {
                 max={100}
                 color="#F59E0B"
                 suffix="%"
+                themeStyles={themeStyles}
               />
               <DonutStat
                 label="Correct Rate"
@@ -421,23 +454,24 @@ export default function AnalyticsPage() {
                 max={100}
                 color="#38BDF8"
                 suffix="%"
+                themeStyles={themeStyles}
               />
-              <StatCard label="Total Tests" value={summary.totalTests} />
-              <StatCard label="Best Score" value={summary.bestScore} color="#22C55E" />
+              <StatCard label="Total Tests" value={summary.totalTests} themeStyles={themeStyles} />
+              <StatCard label="Best Score" value={summary.bestScore} color="#22C55E" themeStyles={themeStyles} />
             </div>
 
-            <div style={{ ...G.card, padding: "22px", marginBottom: "20px" }}>
-              <h3 style={{ fontWeight: 700, marginBottom: "20px" }}>Subject-wise Accuracy</h3>
-              <PillBarChart data={subjects.slice().sort((a, b) => b.averageAccuracy - a.averageAccuracy).slice(0, 8)} />
+            <div style={{ ...cardStyle, padding: "22px", marginBottom: "20px" }}>
+              <h3 style={{ fontWeight: 700, marginBottom: "20px", color: themeStyles.color }}>Subject-wise Accuracy</h3>
+              <PillBarChart data={subjects.slice().sort((a, b) => b.averageAccuracy - a.averageAccuracy).slice(0, 8)} themeStyles={themeStyles} />
             </div>
 
-            <div style={{ ...G.card, padding: "22px", marginBottom: "20px" }}>
-              <h3 style={{ fontWeight: 700, marginBottom: "16px" }}>Score &amp; Accuracy Trend</h3>
-              <TrendLineChart data={recentWeekly} />
+            <div style={{ ...cardStyle, padding: "22px", marginBottom: "20px" }}>
+              <h3 style={{ fontWeight: 700, marginBottom: "16px", color: themeStyles.color }}>Score &amp; Accuracy Trend</h3>
+              <TrendLineChart data={recentWeekly} themeStyles={themeStyles} />
             </div>
 
             {weakSubjects.length > 0 && (
-              <div style={{ ...G.card, padding: "22px" }}>
+              <div style={{ ...cardStyle, padding: "22px" }}>
                 <h3 style={{ fontWeight: 700, marginBottom: "14px", color: "#EF4444" }}>
                   Focus Areas
                 </h3>
@@ -445,7 +479,7 @@ export default function AnalyticsPage() {
                   {weakSubjects.map((s) => (
                     <div
                       key={s.subject}
-                      style={{ display: "flex", justifyContent: "space-between", fontSize: ".88rem" }}
+                      style={{ display: "flex", justifyContent: "space-between", fontSize: ".88rem", color: themeStyles.color, flexWrap: "wrap", gap: "6px" }}
                     >
                       <span>{s.subject}</span>
                       <span style={{ color: "#EF4444", fontWeight: 700 }}>

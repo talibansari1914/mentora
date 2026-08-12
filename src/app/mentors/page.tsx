@@ -2,16 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { G } from "@/constants/colors";
 import { CATEGORIES } from "@/constants/mentors";
 import { mentorService } from "@/services/mentorService";
 import { authService } from "@/services/authService";
 import { Mentor, MentorCategory } from "@/types/mentor";
+import BackToDashboardLink from "@/components/common/BackToDashboardLink";
 
 import MentorFilters from "@/components/mentors/MentorFilters";
 import MentorSection from "@/components/mentors/MentorSection";
 import MentorCard from "@/components/mentors/MentorCard";
-import { SlidersHorizontal, X } from "lucide-react";
+import { SlidersHorizontal, X, Zap } from "lucide-react";
+import { getErrorMessage } from "@/lib/errors";
 
 type ModeFilter = "online" | "offline";
 type CategoryFilter = MentorCategory | "all";
@@ -34,20 +35,29 @@ export default function MentorsHomePage() {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+
     (async () => {
       try {
         const [allMentors, profile] = await Promise.all([
           mentorService.getAllMentors(),
           authService.getProfile(),
         ]);
+        if (cancelled) return;
         setMentors(allMentors);
         if (profile?.exam) setUserExam(profile.exam);
-      } catch (err: any) {
-        setLoadError(err.message ?? "Could not load mentors.");
+      } catch (err: unknown) {
+        if (!cancelled) setLoadError(getErrorMessage(err, "Could not load mentors."));
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
+
+    // Avoids setting state on this component after it's unmounted (e.g.
+    // the user navigates away while this fetch is still in flight).
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const modeMentors = useMemo(
@@ -91,12 +101,13 @@ export default function MentorsHomePage() {
     flex: 1,
     padding: "10px 16px",
     borderRadius: "12px",
-    border: active ? "1px solid transparent" : "1px solid rgba(255,255,255,.08)",
-    background: active ? G.grad : "transparent",
-    color: active ? "#111827" : "#94A3B8",
+    border: active ? "1px solid var(--theme-accent)" : "1px solid var(--theme-border)",
+    background: active ? "var(--theme-accent)" : "var(--theme-card-bg)",
+    color: active ? "var(--theme-accent-text)" : "var(--theme-text-sub)",
     fontWeight: 700,
     fontSize: ".88rem",
     cursor: "pointer",
+    boxShadow: active ? "0 4px 14px var(--theme-accent-glow)" : "none",
     transition: "all 0.2s ease",
     whiteSpace: "nowrap",
   });
@@ -104,9 +115,9 @@ export default function MentorsHomePage() {
   const categoryBtn = (active: boolean): React.CSSProperties => ({
     padding: "8px 14px",
     borderRadius: "10px",
-    border: active ? "1px solid transparent" : "1px solid rgba(255,255,255,.08)",
-    background: active ? G.grad : "rgba(22, 31, 49, 0.6)",
-    color: active ? "#111827" : "#94A3B8",
+    border: active ? "1px solid var(--theme-accent)" : "1px solid var(--theme-border)",
+    background: active ? "var(--theme-accent)" : "var(--theme-card-bg)",
+    color: active ? "var(--theme-accent-text)" : "var(--theme-text-sub)",
     fontWeight: 700,
     fontSize: ".8rem",
     cursor: "pointer",
@@ -114,46 +125,45 @@ export default function MentorsHomePage() {
     alignItems: "center",
     gap: "6px",
     whiteSpace: "nowrap",
+    boxShadow: active ? "0 4px 12px var(--theme-accent-glow)" : "none",
     transition: "all 0.2s ease",
   });
 
   return (
-    <div style={{ minHeight: "100vh", background: "#06090e", color: "white", fontFamily: "'DM Sans', sans-serif" }}>
-      
+    <div style={{ minHeight: "100vh", background: "var(--theme-bg-main)", color: "var(--theme-text-main)", fontFamily: "'Inter', sans-serif" }}>
       {/* Sticky Top Navbar */}
       <header
         style={{
           position: "sticky",
           top: 0,
           zIndex: 50,
-          background: "rgba(11, 15, 23, 0.9)",
+          background: "var(--theme-card-bg)",
           backdropFilter: "blur(20px)",
-          borderBottom: "1px solid #2d3748",
-          padding: "14px 20px",
+          borderBottom: "1px solid var(--theme-border)",
+          padding: "14px clamp(16px, 4vw, 24px)",
         }}
       >
-        <div style={{ maxWidth: "1200px", margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px" }}>
-          <Link href="/dashboard" style={{ color: "#94A3B8", fontSize: ".85rem", textDecoration: "none", fontWeight: 600 }}>
-            ← Dashboard
-          </Link>
+        <div style={{ maxWidth: "1200px", margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" }}>
+          <BackToDashboardLink inline />
 
-          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "20px", flexWrap: "wrap" }}>
             <Link
               href="/mentors/bookings"
-              style={{ color: "#f59e0b", fontSize: ".85rem", fontWeight: 700, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "4px" }}
+              style={{ color: "var(--theme-accent)", fontSize: ".85rem", fontWeight: 700, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "4px" }}
             >
               📅 My Bookings
             </Link>
             <Link
               href="/mentors/apply"
               style={{
-                background: G.grad,
-                color: "#111827",
+                background: "var(--theme-accent)",
+                color: "var(--theme-accent-text)",
                 fontSize: ".82rem",
                 fontWeight: 800,
                 padding: "7px 14px",
                 borderRadius: "10px",
                 textDecoration: "none",
+                boxShadow: "0 4px 12px var(--theme-accent-glow)",
                 transition: "opacity 0.2s ease",
               }}
             >
@@ -164,21 +174,22 @@ export default function MentorsHomePage() {
       </header>
 
       {/* Main Container */}
-      <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "24px 20px 60px" }}>
-        
-        {/* Title Header & Become a Mentor Banner Callout */}
+      <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "24px clamp(12px, 4vw, 20px) 60px", boxSizing: "border-box" }}>
+        {/* Title Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px", marginBottom: "20px" }}>
           <div>
-            <h1 style={{ fontSize: "1.7rem", fontWeight: 800, marginBottom: "4px", color: "white" }}>Find a Mentor</h1>
-            <p style={{ color: "#a0aec0", fontSize: ".88rem" }}>
+            <h1 style={{ fontSize: "clamp(1.4rem, 4vw, 1.7rem)", fontWeight: 800, marginBottom: "4px", color: "var(--theme-text-main)", letterSpacing: "-0.02em" }}>
+              Find a <span style={{ color: "var(--theme-accent)" }}>Mentor</span>
+            </h1>
+            <p style={{ color: "var(--theme-text-sub)", fontSize: ".88rem", fontWeight: 500 }}>
               Book 1-on-1 sessions with academic, skill, and career experts.
             </p>
           </div>
         </div>
 
         {/* Online / Offline toggle + Mobile Filter Trigger */}
-        <div style={{ display: "flex", gap: "12px", marginBottom: "20px", alignItems: "center" }}>
-          <div style={{ display: "flex", gap: "10px", flex: 1, maxWidth: "340px" }}>
+        <div style={{ display: "flex", gap: "12px", marginBottom: "20px", alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "10px", flex: 1, maxWidth: "340px", minWidth: "220px" }}>
             <button style={modeBtn(mode === "online")} onClick={() => setMode("online")}>
               🟢 Online Sessions
             </button>
@@ -192,32 +203,33 @@ export default function MentorsHomePage() {
             onClick={() => setMobileFiltersOpen(true)}
             style={{
               display: "none",
-              background: "#161f31",
-              border: "1px solid #2d3748",
-              color: "white",
+              background: "var(--theme-card-bg)",
+              border: "1px solid var(--theme-border)",
+              color: "var(--theme-text-main)",
               padding: "10px 14px",
               borderRadius: "12px",
               fontWeight: 700,
               fontSize: "0.85rem",
               alignItems: "center",
               gap: "6px",
-              cursor: "pointer"
+              cursor: "pointer",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
             }}
             className="mobile-filter-trigger"
           >
-            <SlidersHorizontal size={16} style={{ color: "#f59e0b" }} /> Filters
+            <SlidersHorizontal size={16} style={{ color: "var(--theme-accent)" }} /> Filters
           </button>
         </div>
 
         {/* Category horizontal scroll container */}
-        <div 
-          style={{ 
-            display: "flex", 
-            gap: "8px", 
-            overflowX: "auto", 
-            paddingBottom: "8px", 
+        <div
+          style={{
+            display: "flex",
+            gap: "8px",
+            overflowX: "auto",
+            paddingBottom: "8px",
             marginBottom: "20px",
-            scrollbarWidth: "none" 
+            scrollbarWidth: "none",
           }}
         >
           <button style={categoryBtn(category === "all")} onClick={() => setCategory("all")}>
@@ -232,7 +244,17 @@ export default function MentorsHomePage() {
         </div>
 
         {/* TOP FILTERS BAR */}
-        <div style={{ background: "#0b0f17", border: "1px solid #2d3748", borderRadius: "18px", padding: "18px 20px", marginBottom: "28px" }}>
+        <div
+          style={{
+            background: "var(--theme-card-bg)",
+            border: "1px solid var(--theme-border)",
+            borderRadius: "18px",
+            padding: "18px 20px",
+            marginBottom: "28px",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.02)",
+            boxSizing: "border-box",
+          }}
+        >
           <MentorFilters
             search={search}
             onSearchChange={setSearch}
@@ -245,7 +267,7 @@ export default function MentorsHomePage() {
           />
         </div>
 
-        {loadError && <p style={{ color: "#f87171", fontSize: ".85rem", marginBottom: "16px" }}>{loadError}</p>}
+        {loadError && <p style={{ color: "#EF4444", fontSize: ".85rem", marginBottom: "16px", fontWeight: 600 }}>⚠️ {loadError}</p>}
 
         {!loading && !loadError && (
           <>
@@ -256,21 +278,43 @@ export default function MentorsHomePage() {
           </>
         )}
 
-        {/* Full directory section (Single column clean layout) */}
+        {/* Full directory section */}
         <section style={{ marginTop: "32px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-            <h2 style={{ fontSize: "1.15rem", fontWeight: 800, color: "white" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "8px" }}>
+            <h2 style={{ fontSize: "1.15rem", fontWeight: 800, color: "var(--theme-text-main)" }}>
               All {mode === "online" ? "Online" : "Offline"} Mentors ({filtered.length})
             </h2>
           </div>
 
           <div>
             {loading ? (
-              <div style={{ padding: "40px 0", textAlign: "center", color: "#a0aec0", fontSize: "0.9rem" }}>Loading mentors...</div>
+              <div
+                style={{
+                  background: "var(--theme-card-bg)",
+                  border: "1px solid var(--theme-border)",
+                  borderRadius: "20px",
+                  padding: "40px",
+                  textAlign: "center",
+                  color: "var(--theme-text-sub)",
+                  fontWeight: 600,
+                }}
+              >
+                Loading mentors...
+              </div>
             ) : filtered.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "60px 20px", color: "#a0aec0", background: "#0b0f17", border: "1px solid #2d3748", borderRadius: "20px" }}>
-                <p style={{ fontSize: "1rem", fontWeight: 700, marginBottom: "6px", color: "white" }}>No mentors found</p>
-                <p style={{ fontSize: "0.85rem" }}>Try adjusting your filters, category, or search term.</p>
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "60px 20px",
+                  color: "var(--theme-text-sub)",
+                  background: "var(--theme-card-bg)",
+                  border: "1px solid var(--theme-border)",
+                  borderRadius: "20px",
+                  boxShadow: "0 10px 30px rgba(0,0,0,0.02)",
+                }}
+              >
+                <p style={{ fontSize: "1rem", fontWeight: 700, marginBottom: "6px", color: "var(--theme-text-main)" }}>No mentors found</p>
+                <p style={{ fontSize: "0.85rem", fontWeight: 500 }}>Try adjusting your filters, category, or search term.</p>
               </div>
             ) : (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: "16px" }}>
@@ -286,8 +330,8 @@ export default function MentorsHomePage() {
         <section
           style={{
             marginTop: "60px",
-            background: "linear-gradient(135deg, rgba(22, 31, 49, 0.8) 0%, rgba(11, 15, 23, 0.95) 100%)",
-            border: "1px solid #2d3748",
+            background: "var(--theme-card-bg)",
+            border: "1px solid var(--theme-border)",
             borderRadius: "20px",
             padding: "32px 24px",
             display: "flex",
@@ -295,46 +339,60 @@ export default function MentorsHomePage() {
             alignItems: "center",
             flexWrap: "wrap",
             gap: "20px",
-            boxShadow: "0 8px 32px rgba(0,0,0,0.3)"
+            boxShadow: "0 10px 30px rgba(0,0,0,0.03)",
+            boxSizing: "border-box",
           }}
         >
           <div style={{ maxWidth: "600px" }}>
-            <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "white", marginBottom: "8px" }}>
+            <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "var(--theme-text-main)", marginBottom: "8px" }}>
               Want to share your expertise and mentor aspirants?
             </h3>
-            <p style={{ color: "#94A3B8", fontSize: ".9rem", lineHeight: "1.5" }}>
+            <p style={{ color: "var(--theme-text-sub)", fontSize: ".9rem", lineHeight: "1.5", fontWeight: 500 }}>
               Join our elite roster of mentors, guide students through their preparation journey, and monetize your knowledge on Mentora.
             </p>
           </div>
           <Link
             href="/mentors/apply"
             style={{
-              background: G.grad,
-              color: "#111827",
+              background: "var(--theme-accent)",
+              color: "var(--theme-accent-text)",
               fontWeight: 800,
               fontSize: ".9rem",
               padding: "12px 24px",
               borderRadius: "12px",
               textDecoration: "none",
-              boxShadow: "0 4px 14px rgba(245, 158, 11, 0.3)",
+              boxShadow: "0 4px 14px var(--theme-accent-glow)",
               transition: "transform 0.2s ease",
-              whiteSpace: "nowrap"
+              whiteSpace: "nowrap",
             }}
           >
             Apply as a Mentor →
           </Link>
         </section>
-
       </div>
 
       {/* Mobile Filters Drawer / Modal */}
       {mobileFiltersOpen && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)", display: "flex", justifyContent: "flex-end" }}>
-          <div style={{ width: "100%", maxWidth: "340px", background: "#0b0f17", height: "100%", padding: "24px", overflowY: "auto", borderLeft: "1px solid #2d3748", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)", display: "flex", justifyContent: "flex-end" }}>
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "340px",
+              background: "var(--theme-card-bg)",
+              height: "100%",
+              padding: "24px",
+              overflowY: "auto",
+              borderLeft: "1px solid var(--theme-border)",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+              boxSizing: "border-box",
+            }}
+          >
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-                <h3 style={{ fontSize: "1.05rem", fontWeight: 800, color: "white" }}>Filter Mentors</h3>
-                <button onClick={() => setMobileFiltersOpen(false)} style={{ background: "transparent", border: "none", color: "#a0aec0", cursor: "pointer" }}>
+                <h3 style={{ fontSize: "1.05rem", fontWeight: 800, color: "var(--theme-text-main)" }}>Filter Mentors</h3>
+                <button onClick={() => setMobileFiltersOpen(false)} style={{ background: "transparent", border: "none", color: "var(--theme-text-sub)", cursor: "pointer" }}>
                   <X size={20} />
                 </button>
               </div>
@@ -353,7 +411,19 @@ export default function MentorsHomePage() {
 
             <button
               onClick={() => setMobileFiltersOpen(false)}
-              style={{ width: "100%", background: "#f59e0b", border: "none", color: "#000", padding: "12px", borderRadius: "12px", fontWeight: 800, fontSize: "0.9rem", cursor: "pointer", marginTop: "20px" }}
+              style={{
+                width: "100%",
+                background: "var(--theme-accent)",
+                border: "none",
+                color: "var(--theme-accent-text)",
+                padding: "12px",
+                borderRadius: "12px",
+                fontWeight: 800,
+                fontSize: "0.9rem",
+                cursor: "pointer",
+                marginTop: "20px",
+                boxShadow: "0 4px 12px var(--theme-accent-glow)",
+              }}
             >
               Apply Filters ({filtered.length} Results)
             </button>
@@ -374,7 +444,6 @@ export default function MentorsHomePage() {
           }
         }
       `}</style>
-
     </div>
   );
 }

@@ -7,24 +7,28 @@ import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 
-import { G } from "@/constants/colors";
 import { bookService } from "@/services/bookService";
 import { libraryService } from "@/services/libraryService";
 import { Book } from "@/types/book";
+import { getErrorMessage } from "@/lib/errors";
 
-// react-pdf needs a separate "worker" script to actually parse PDFs (this
-// runs the heavy parsing off the main thread so the page doesn't freeze).
-// Pointing it at a CDN build avoids fighting Next.js's bundler over how to
-// package that worker file ourselves.
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+// Minimal structural type for the pdf.js page object passed into
+// handleFirstPageMeasured — only the one method this file actually calls.
+interface PDFPageLike {
+  getViewport(params: { scale: number }): { height: number; width: number };
+}
+
+// react-pdf worker setup — bundled locally via the bundler (instead of
+// pointing at an external CDN like unpkg.com) so the reader doesn't depend
+// on a third-party host being reachable. If that CDN is ever slow, blocked,
+// or down, the entire book reader would fail with it.
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  "pdfjs-dist/build/pdf.worker.min.mjs",
+  import.meta.url
+).toString();
 
 // Key used to hand off extracted page text to the AI Book Tools page.
 const AI_HANDOFF_KEY = "mentora_book_tools_prefill";
-
-// How many pages before/after the current one get actually rendered as
-// real PDF content. Everything outside this window is a lightweight
-// spacer div — this is what lets a 1500-page PDF scroll smoothly instead
-// of trying to render all 1500 pages into memory at once.
 const RENDER_BUFFER = 2;
 
 export default function ReaderPage() {
@@ -37,31 +41,29 @@ export default function ReaderPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [numPages, setNumPages] = useState(0);
-  const [pageNumber, setPageNumber] = useState(1); // the page currently most visible on screen
+  const [pageNumber, setPageNumber] = useState(1);
   const [scale, setScale] = useState(1.1);
   const [pageInput, setPageInput] = useState("1");
   const [extracting, setExtracting] = useState(false);
 
-  // Estimated height (in px, at current scale) for un-rendered placeholder
-  // pages, so the scrollbar/scroll position stays roughly proportionate.
-  // Refined automatically once a real page has loaded and we know its size.
   const [estimatedPageHeight, setEstimatedPageHeight] = useState(1000);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const pageElRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const hasResumedRef = useRef(false);
-  // True right after a manual "jump to page" — suppresses the scroll
-  // observer for a moment so it doesn't immediately fight the jump.
   const isJumpingRef = useRef(false);
 
-  // ── Load the book + figure out where the student left off ──
   useEffect(() => {
+    let cancelled = false;
+
     (async () => {
       try {
         const [foundBook, allProgress] = await Promise.all([
           bookService.getBookById(bookId),
           libraryService.getAllProgress(),
         ]);
+
+        if (cancelled) return;
 
         if (!foundBook) {
           setLoadError("Book not found.");
@@ -72,21 +74,25 @@ export default function ReaderPage() {
 
         const existing = allProgress.find((p) => Number(p.book_id) === bookId);
         if (existing) {
-          (window as any).__mentora_resume_percent = existing.progress_percent;
+          (window as unknown as Record<string, number>).__mentora_resume_percent = existing.progress_percent;
         }
-      } catch (err: any) {
-        setLoadError(err.message ?? "Could not load this book.");
+      } catch (err: unknown) {
+        if (!cancelled) setLoadError(getErrorMessage(err, "Could not load this book."));
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [bookId]);
 
   function handleDocumentLoad({ numPages: total }: { numPages: number }) {
     setNumPages(total);
 
     if (!hasResumedRef.current) {
-      const resumePercent = (window as any).__mentora_resume_percent ?? 0;
+      const resumePercent = (window as unknown as Record<string, number>).__mentora_resume_percent ?? 0;
       if (resumePercent > 0) {
         const resumePage = Math.max(1, Math.round((resumePercent / 100) * total));
         setPageNumber(resumePage);
@@ -96,8 +102,6 @@ export default function ReaderPage() {
     }
   }
 
-  // ── Save progress whenever the visible page changes, debounced so
-  //    scrolling fast doesn't fire a database write on every frame ──
   useEffect(() => {
     if (!book || numPages === 0) return;
 
@@ -111,8 +115,6 @@ export default function ReaderPage() {
     return () => clearTimeout(timeout);
   }, [pageNumber, numPages, book]);
 
-  // ── The "render window": real <Page> components only exist for pages
-  //    in this range. Everything else is a spacer div (see the map below). ──
   const renderStart = Math.max(1, pageNumber - RENDER_BUFFER);
   const renderEnd = Math.min(numPages || 1, pageNumber + RENDER_BUFFER);
 
@@ -121,10 +123,6 @@ export default function ReaderPage() {
     [numPages]
   );
 
-  // ── One IntersectionObserver watches every page slot (real or
-  //    placeholder). Whichever is most visible becomes the new "current"
-  //    page — this is what drives the render window as the user scrolls,
-  //    and what makes scrolling near the edges pull in the next pages. ──
   useEffect(() => {
     if (!numPages || !containerRef.current) return;
 
@@ -153,8 +151,6 @@ export default function ReaderPage() {
     Object.values(pageElRefs.current).forEach((el) => el && observer.observe(el));
 
     return () => observer.disconnect();
-    // Re-attach whenever the render window shifts, since new placeholder/
-    // real page divs get mounted and need to be observed too.
   }, [numPages, renderStart, renderEnd]);
 
   function goToPage(page: number) {
@@ -164,8 +160,6 @@ export default function ReaderPage() {
     setPageNumber(clamped);
     setPageInput(String(clamped));
 
-    // Wait a tick for the target page's div to mount (it may currently be
-    // a placeholder outside the old render window), then scroll to it.
     setTimeout(() => {
       pageElRefs.current[clamped]?.scrollIntoView({ block: "start" });
       setTimeout(() => {
@@ -174,17 +168,15 @@ export default function ReaderPage() {
     }, 50);
   }
 
-  function handleFirstPageMeasured(page: any) {
+  function handleFirstPageMeasured(page: PDFPageLike) {
     try {
       const viewport = page.getViewport({ scale });
       setEstimatedPageHeight(viewport.height);
     } catch {
-      // Non-fatal — placeholders just keep using the previous estimate.
+      // Non-fatal
     }
   }
 
-  // ── Extracts the current page's real text using PDF.js directly, then
-  //    hands it off to AI Book Tools ──
   async function handleAskAI() {
     if (!book?.pdfUrl) return;
 
@@ -194,7 +186,7 @@ export default function ReaderPage() {
       const pdf = await loadingTask.promise;
       const page = await pdf.getPage(pageNumber);
       const textContent = await page.getTextContent();
-      const pageText = textContent.items.map((item: any) => item.str).join(" ");
+      const pageText = textContent.items.map((item) => ("str" in item ? item.str : "")).join(" ");
 
       sessionStorage.setItem(AI_HANDOFF_KEY, pageText);
       router.push("/library/ai-tools");
@@ -205,20 +197,39 @@ export default function ReaderPage() {
     }
   }
 
+  // UI now reads directly from the global CSS variables (globals.css) that
+  // the dashboard's ThemeToggle sets via data-theme on <html>. No local
+  // isDark state, no localStorage polling, no interval — one less thing
+  // running in the background on an already render-heavy PDF page.
+  const themeStyles = {
+    bg: "var(--theme-bg-main, #080C14)",
+    color: "var(--theme-text-main, #F8FAFC)",
+    subText: "var(--theme-text-sub, #94A3B8)",
+    toolbarBg: "var(--theme-card-bg, rgba(8, 12, 20, 0.95))",
+    toolbarBorder: "var(--theme-border, rgba(255, 255, 255, 0.08))",
+    btnBg: "var(--theme-card-bg, #111827)",
+    btnBorder: "1px solid var(--theme-border, rgba(255, 255, 255, 0.12))",
+    cardBg: "var(--theme-card-bg, #111827)",
+    cardBorder: "var(--theme-border, rgba(255, 255, 255, 0.08))",
+  };
+
   const iconBtn: React.CSSProperties = {
     width: "36px",
     height: "36px",
     borderRadius: "8px",
-    border: "1px solid rgba(255,255,255,.1)",
-    background: "#111827",
-    color: "white",
+    border: themeStyles.btnBorder,
+    background: themeStyles.btnBg,
+    color: themeStyles.color,
     cursor: "pointer",
     fontSize: "1rem",
+    fontWeight: 700,
+    boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+    transition: "background 0.2s, border-color 0.2s",
   };
 
   if (loading) {
     return (
-      <div style={{ minHeight: "100vh", background: "#080C14", color: "#64748B", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ minHeight: "100vh", background: themeStyles.bg, color: themeStyles.subText, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 600 }}>
         Loading book...
       </div>
     );
@@ -226,10 +237,10 @@ export default function ReaderPage() {
 
   if (loadError || !book) {
     return (
-      <div style={{ minHeight: "100vh", background: "#080C14", color: "white", display: "flex", alignItems: "center", justifyContent: "center", padding: "32px" }}>
-        <div style={{ ...G.card, padding: "32px", textAlign: "center", maxWidth: "420px" }}>
-          <p style={{ marginBottom: "16px" }}>{loadError ?? "Book not found."}</p>
-          <Link href="/library" style={{ color: "#F59E0B", textDecoration: "none" }}>
+      <div style={{ minHeight: "100vh", background: themeStyles.bg, color: themeStyles.color, display: "flex", alignItems: "center", justifyContent: "center", padding: "32px" }}>
+        <div style={{ background: themeStyles.cardBg, border: `1px solid ${themeStyles.cardBorder}`, borderRadius: "16px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", padding: "32px", textAlign: "center", maxWidth: "420px" }}>
+          <p style={{ marginBottom: "16px", fontWeight: 600, color: themeStyles.subText }}>{loadError ?? "Book not found."}</p>
+          <Link href="/library" style={{ color: "var(--theme-accent, #D97706)", textDecoration: "none", fontWeight: 700 }}>
             ← Back to Library
           </Link>
         </div>
@@ -239,13 +250,13 @@ export default function ReaderPage() {
 
   if (!book.pdfUrl) {
     return (
-      <div style={{ minHeight: "100vh", background: "#080C14", color: "white", display: "flex", alignItems: "center", justifyContent: "center", padding: "32px" }}>
-        <div style={{ ...G.card, padding: "32px", textAlign: "center", maxWidth: "420px" }}>
-          <p style={{ fontWeight: 700, marginBottom: "8px" }}>{book.title}</p>
-          <p style={{ color: "#64748B", marginBottom: "16px" }}>
+      <div style={{ minHeight: "100vh", background: themeStyles.bg, color: themeStyles.color, display: "flex", alignItems: "center", justifyContent: "center", padding: "32px" }}>
+        <div style={{ background: themeStyles.cardBg, border: `1px solid ${themeStyles.cardBorder}`, borderRadius: "16px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", padding: "32px", textAlign: "center", maxWidth: "420px" }}>
+          <p style={{ fontWeight: 800, marginBottom: "8px", color: themeStyles.color }}>{book.title}</p>
+          <p style={{ color: themeStyles.subText, marginBottom: "16px", fontSize: "0.9rem", fontWeight: 500 }}>
             The PDF for this book hasn't been uploaded yet.
           </p>
-          <Link href="/library" style={{ color: "#F59E0B", textDecoration: "none" }}>
+          <Link href="/library" style={{ color: "var(--theme-accent, #D97706)", textDecoration: "none", fontWeight: 700 }}>
             ← Back to Library
           </Link>
         </div>
@@ -254,14 +265,14 @@ export default function ReaderPage() {
   }
 
   return (
-    <div style={{ height: "100vh", background: "#080C14", color: "white", display: "flex", flexDirection: "column" }}>
+    <div style={{ height: "100vh", background: themeStyles.bg, color: themeStyles.color, display: "flex", flexDirection: "column", fontFamily: "'DM Sans', sans-serif", transition: "background 0.3s, color 0.3s" }}>
       {/* Toolbar */}
       <div
         style={{
           zIndex: 20,
-          background: "rgba(8,12,20,0.95)",
+          background: themeStyles.toolbarBg,
           backdropFilter: "blur(20px)",
-          borderBottom: "1px solid rgba(255,255,255,.07)",
+          borderBottom: `1px solid ${themeStyles.toolbarBorder}`,
           padding: "12px 20px",
           display: "flex",
           alignItems: "center",
@@ -269,13 +280,14 @@ export default function ReaderPage() {
           gap: "16px",
           flexWrap: "wrap",
           flexShrink: 0,
+          transition: "background 0.3s, border-color 0.3s",
         }}
       >
-        <Link href="/library" style={{ color: "#94A3B8", textDecoration: "none", fontSize: ".85rem", flexShrink: 0 }}>
+        <Link href="/library" style={{ color: themeStyles.subText, textDecoration: "none", fontSize: "0.85rem", fontWeight: 600, flexShrink: 0 }}>
           ← Library
         </Link>
 
-        <p style={{ fontWeight: 700, fontSize: ".9rem", flex: 1, textAlign: "center", minWidth: "150px" }}>
+        <p style={{ fontWeight: 700, fontSize: "0.9rem", flex: 1, textAlign: "center", minWidth: "150px", color: themeStyles.color }}>
           {book.title}
         </p>
 
@@ -288,22 +300,24 @@ export default function ReaderPage() {
             style={{
               width: "50px",
               textAlign: "center",
-              background: "#111827",
-              border: "1px solid rgba(255,255,255,.1)",
+              background: themeStyles.btnBg,
+              border: themeStyles.btnBorder,
               borderRadius: "8px",
-              color: "white",
+              color: themeStyles.color,
               padding: "8px 0",
-              fontSize: ".85rem",
+              fontSize: "0.85rem",
+              fontWeight: 600,
+              transition: "background 0.2s, border-color 0.2s",
             }}
           />
-          <span style={{ color: "#64748B", fontSize: ".82rem" }}>/ {numPages || "..."}</span>
+          <span style={{ color: themeStyles.subText, fontSize: "0.82rem", fontWeight: 600 }}>/ {numPages || "..."}</span>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <button style={iconBtn} onClick={() => setScale((s) => Math.max(0.6, s - 0.1))}>
             −
           </button>
-          <span style={{ color: "#64748B", fontSize: ".78rem", width: "40px", textAlign: "center" }}>
+          <span style={{ color: themeStyles.subText, fontSize: "0.78rem", width: "40px", textAlign: "center", fontWeight: 600 }}>
             {Math.round(scale * 100)}%
           </span>
           <button style={iconBtn} onClick={() => setScale((s) => Math.min(2, s + 0.1))}>
@@ -315,29 +329,30 @@ export default function ReaderPage() {
           onClick={handleAskAI}
           disabled={extracting}
           style={{
-            background: G.grad,
+            background: "var(--theme-accent, #F59E0B)",
             border: "none",
-            color: "#111827",
+            color: "var(--theme-accent-text, #080C14)",
             padding: "9px 18px",
             borderRadius: "8px",
-            fontWeight: 700,
-            fontSize: ".82rem",
+            fontWeight: 800,
+            fontSize: "0.82rem",
             cursor: extracting ? "not-allowed" : "pointer",
             flexShrink: 0,
+            boxShadow: "0 2px 6px var(--theme-accent-glow, rgba(245, 158, 11, 0.25))",
           }}
         >
           {extracting ? "Reading page..." : "🤖 Ask AI about this page"}
         </button>
       </div>
 
-      {/* Continuous scrolling PDF — see RENDER_BUFFER comment above for how this stays fast */}
+      {/* Continuous scrolling PDF */}
       <div ref={containerRef} style={{ flex: 1, overflow: "auto", padding: "24px 0" }}>
         <Document
           file={book.pdfUrl}
           onLoadSuccess={handleDocumentLoad}
           onLoadError={(err) => setLoadError(err.message)}
-          loading={<p style={{ color: "#64748B", textAlign: "center" }}>Loading PDF...</p>}
-          error={<p style={{ color: "#EF4444", textAlign: "center" }}>Could not load this PDF file.</p>}
+          loading={<p style={{ color: themeStyles.subText, textAlign: "center", fontWeight: 600 }}>Loading PDF...</p>}
+          error={<p style={{ color: "#DC2626", textAlign: "center", fontWeight: 600 }}>Could not load this PDF file.</p>}
         >
           {allPageNumbers.map((num) => {
             const isInRenderWindow = num >= renderStart && num <= renderEnd;
@@ -365,16 +380,14 @@ export default function ReaderPage() {
                     onLoadSuccess={num === pageNumber ? handleFirstPageMeasured : undefined}
                   />
                 ) : (
-                  // Lightweight placeholder — no PDF content rendered here at
-                  // all, just reserves scroll space until the user scrolls
-                  // close enough for this page to enter the render window.
                   <div
                     style={{
                       width: "100%",
                       maxWidth: "700px",
-                      background: "#0B1220",
-                      border: "1px solid rgba(255,255,255,.04)",
-                      borderRadius: "4px",
+                      background: themeStyles.cardBg,
+                      border: `1px solid ${themeStyles.cardBorder}`,
+                      borderRadius: "8px",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
                     }}
                   />
                 )}

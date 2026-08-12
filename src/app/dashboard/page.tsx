@@ -4,7 +4,12 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Video, Sparkles, ArrowRight, Volume2 } from "lucide-react";
 import { useDashboard } from "@/hooks/useDashboard";
-import { testService } from "@/services/testService";
+import { authService } from "@/services/authService";
+import { testService, type TestResult } from "@/services/testService";
+import { settingsService } from "@/services/settingsService";
+import { createClient } from "@/lib/supabase";
+import { isPremiumUser } from "@/lib/subscription";
+import type { DateFormat } from "@/lib/dateFormat";
 import { G } from "@/constants/colors";
 
 import Sidebar from "@/components/dashboard/Sidebar";
@@ -17,6 +22,7 @@ import StudyStreak from "@/components/dashboard/StudyStreak";
 import ContinueReading from "@/components/dashboard/ContinueReading";
 import RecentTests from "@/components/dashboard/RecentTests";
 import FocusAreas from "@/components/dashboard/FocusAreas";
+import OnboardingModal from "@/components/common/OnboardingModal";
 
 export default function DashboardPage() {
   const { dashboard, loading, error, refresh } = useDashboard();
@@ -24,7 +30,51 @@ export default function DashboardPage() {
   // it). On desktop, the sidebar is always shown regardless of this state —
   // see the ".dashboard-sidebar" rule in the <style> block below.
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [recentTests, setRecentTests] = useState<any[]>([]);
+  const [isPremium, setIsPremium] = useState(false);
+  const [recentTests, setRecentTests] = useState<TestResult[]>([]);
+  // Settings → Language & Region → Date Format, passed down to any widget
+  // (like Recent Tests) that shows a date.
+  const [dateFormat, setDateFormat] = useState<DateFormat>("DD/MM/YYYY");
+
+  useEffect(() => {
+    let cancelled = false;
+    settingsService
+      .getSettings()
+      .then((settings) => {
+        if (!cancelled) setDateFormat(settings.language_region.dateFormat as DateFormat);
+      })
+      .catch(() => {
+        // Not fatal — dashboard still works with the default format.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Drives the sidebar's plan label and whether the "Upgrade Now" upsell
+  // box shows at all - a paying customer should never see an ad to buy
+  // what they already have.
+  //
+  // Uses authService.getCurrentUser() (deduped — see asyncCache.ts)
+  // instead of a second, separate supabase.auth.getUser() call, since
+  // useDashboard() above already asks the exact same question at the
+  // exact same moment on every dashboard load. Firing both was two
+  // redundant auth round trips instead of one shared one.
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      const user = await authService.getCurrentUser();
+      if (!user || cancelled) return;
+      const supabase = createClient();
+      const premium = await isPremiumUser(supabase, user.id);
+      if (!cancelled) setIsPremium(premium);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // ==========================
   // Derived display values
@@ -43,7 +93,7 @@ export default function DashboardPage() {
         .join("")
         .substring(0, 2)
         .toUpperCase() ?? "ST",
-    plan: "Free Plan",
+    plan: isPremium ? "Premium" : "Free Plan",
     exam: dashboard?.profile?.exam ?? "UPSC",
     streak: dashboard?.studyStreak?.current ?? dashboard?.profile?.streak ?? 0,
   };
@@ -54,7 +104,7 @@ export default function DashboardPage() {
     accuracy:
       recentTests.length > 0
         ? Math.round(
-            recentTests.reduce((sum: number, test: any) => sum + test.accuracy, 0) /
+            recentTests.reduce((sum, test) => sum + test.accuracy, 0) /
               recentTests.length
           )
         : 0,
@@ -73,7 +123,7 @@ export default function DashboardPage() {
 
   // Map raw focus-area records into the { topic, pct, level } shape FocusAreas expects.
   const WEAK =
-    dashboard?.focusAreas?.map((item: any) => ({
+    dashboard?.focusAreas?.map((item) => ({
       topic: item.subject,
       pct: item.score,
       level: item.level === "medium" ? "mid" : item.level,
@@ -84,10 +134,12 @@ export default function DashboardPage() {
   // (not part of the main dashboard payload).
   // ==========================
   useEffect(() => {
+    let cancelled = false;
+
     async function loadRecentTests() {
       try {
         const tests = await testService.getRecentResults(dashboard?.profile?.exam ?? "UPSC", 3);
-        setRecentTests(tests);
+        if (!cancelled) setRecentTests(tests);
       } catch (err) {
         console.error(err);
       }
@@ -96,6 +148,10 @@ export default function DashboardPage() {
     if (dashboard) {
       loadRecentTests();
     }
+
+    return () => {
+      cancelled = true;
+    };
   }, [dashboard]);
 
   // ==========================
@@ -106,12 +162,12 @@ export default function DashboardPage() {
       <div
         style={{
           minHeight: "100vh",
-          background: "#080C14",
+          background: "var(--theme-bg-main, #080C14)",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          color: "white",
+          color: "var(--theme-text-main, #F8FAFC)",
           gap: "16px",
         }}
       >
@@ -120,12 +176,12 @@ export default function DashboardPage() {
             width: "36px",
             height: "36px",
             borderRadius: "50%",
-            border: "3px solid rgba(245,158,11,.2)",
-            borderTopColor: "#F59E0B",
+            border: "3px solid var(--theme-accent-soft, rgba(245, 158, 11, 0.2))",
+            borderTopColor: "var(--theme-accent, #F59E0B)",
             animation: "dashboard-spin 0.8s linear infinite",
           }}
         />
-        <p style={{ fontSize: "0.9rem", color: "#94A3B8" }}>Loading Dashboard...</p>
+        <p style={{ fontSize: "0.9rem", color: "var(--theme-text-sub, #94A3B8)" }}>Loading Dashboard...</p>
         <style>{`@keyframes dashboard-spin{to{transform:rotate(360deg)}}`}</style>
       </div>
     );
@@ -139,7 +195,7 @@ export default function DashboardPage() {
       <div
         style={{
           minHeight: "100vh",
-          background: "#080C14",
+          background: "var(--theme-bg-main, #080C14)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -147,16 +203,16 @@ export default function DashboardPage() {
         }}
       >
         <div style={{ ...G.card, padding: "32px", maxWidth: "520px", width: "100%", textAlign: "center" }}>
-          <h2 style={{ fontSize: "1.4rem", fontWeight: 700, marginBottom: "12px" }}>
+          <h2 style={{ fontSize: "1.4rem", fontWeight: 700, marginBottom: "12px", color: "var(--theme-text-main, #F8FAFC)" }}>
             Failed to load Dashboard
           </h2>
-          <p style={{ color: "#94A3B8", fontSize: "0.9rem", marginBottom: "20px" }}>{error}</p>
+          <p style={{ color: "var(--theme-text-sub, #94A3B8)", fontSize: "0.9rem", marginBottom: "20px" }}>{error}</p>
           <button
             onClick={refresh}
             style={{
               background: G.grad,
               border: "none",
-              color: "#080C14",
+              color: "var(--theme-accent-text, #000000)",
               padding: "10px 22px",
               borderRadius: "10px",
               cursor: "pointer",
@@ -174,16 +230,18 @@ export default function DashboardPage() {
   // Main dashboard layout
   // ==========================
   return (
-    <div
-      style={{
-        display: "flex",
-        minHeight: "100vh",
-        background: "#080C14",
-        color: "white",
-        fontFamily: "'DM Sans',sans-serif",
-      }}
-    >
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} userPlan={USER.plan} />
+    <>
+      <OnboardingModal />
+      <div
+        style={{
+          display: "flex",
+          minHeight: "100vh",
+          background: "var(--theme-bg-main, #080C14)",
+          color: "var(--theme-text-main, #F8FAFC)",
+          fontFamily: "'DM Sans',sans-serif",
+        }}
+      >
+        <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} userPlan={USER.plan} exam={USER.exam} isPremium={isPremium} />
 
       <main className="dashboard-main" style={{ flex: 1, marginLeft: "280px", padding: "28px", width: "100%", minWidth: 0 }}>
         <Header
@@ -193,6 +251,7 @@ export default function DashboardPage() {
           isSidebarOpen={sidebarOpen}
           onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
           onRefresh={refresh}
+          isPremium={isPremium}
         />
 
         <Welcome name={USER.name} streak={USER.streak} nationalRank={RANK.national} />
@@ -217,8 +276,8 @@ export default function DashboardPage() {
             justifyContent: "space-between",
             flexWrap: "wrap",
             gap: "16px",
-            background: "linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, rgba(15, 23, 42, 0.7) 100%)",
-            border: "1px solid rgba(245, 158, 11, 0.35)",
+            background: "linear-gradient(135deg, var(--theme-accent-soft, rgba(245, 158, 11, 0.12)) 0%, var(--theme-card-bg, rgba(15, 23, 42, 0.7)) 100%)",
+            border: "1px solid var(--theme-accent-border, rgba(245, 158, 11, 0.35))",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
@@ -227,23 +286,23 @@ export default function DashboardPage() {
                 width: "48px",
                 height: "48px",
                 borderRadius: "14px",
-                background: "rgba(245, 158, 11, 0.2)",
+                background: "var(--theme-accent-soft, rgba(245, 158, 11, 0.2))",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 flexShrink: 0,
               }}
             >
-              <Video size={24} style={{ color: "#F59E0B" }} />
+              <Video size={24} style={{ color: "var(--theme-accent, #F59E0B)" }} />
             </div>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-                <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "white" }}>Video to Notes AI</h3>
+                <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "var(--theme-text-main, #F8FAFC)" }}>Video to Notes AI</h3>
                 <span
                   style={{
                     fontSize: "0.68rem",
-                    background: "#F59E0B",
-                    color: "#000",
+                    background: "var(--theme-accent, #F59E0B)",
+                    color: "var(--theme-accent-text, #000000)",
                     fontWeight: 800,
                     padding: "2px 8px",
                     borderRadius: "20px",
@@ -253,7 +312,7 @@ export default function DashboardPage() {
                   NEW MVP
                 </span>
               </div>
-              <p style={{ fontSize: "0.85rem", color: "#94A3B8" }}>
+              <p style={{ fontSize: "0.85rem", color: "var(--theme-text-sub, #94A3B8)" }}>
                 Instantly turn lecture videos or YouTube URLs into structured multilingual study notes.
               </p>
             </div>
@@ -262,7 +321,7 @@ export default function DashboardPage() {
             href="/video-to-notes"
             style={{
               background: G.grad,
-              color: "#080C14",
+              color: "var(--theme-accent-text, #000000)",
               padding: "10px 20px",
               borderRadius: "12px",
               fontWeight: 800,
@@ -271,7 +330,7 @@ export default function DashboardPage() {
               display: "flex",
               alignItems: "center",
               gap: "8px",
-              boxShadow: "0 4px 14px rgba(245, 158, 11, 0.3)",
+              boxShadow: "0 4px 14px var(--theme-accent-glow, rgba(245, 158, 11, 0.3))",
               transition: "transform 0.2s ease",
             }}
           >
@@ -280,7 +339,7 @@ export default function DashboardPage() {
         </div>
 
         {/* ==========================
-            Text to Audio Quick Feature Card (Added)
+            Text to Audio Quick Feature Card
            ========================== */}
         <div
           style={{
@@ -292,7 +351,7 @@ export default function DashboardPage() {
             justifyContent: "space-between",
             flexWrap: "wrap",
             gap: "16px",
-            background: "linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(15, 23, 42, 0.7) 100%)",
+            background: "linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, var(--theme-card-bg, rgba(15, 23, 42, 0.7)) 100%)",
             border: "1px solid rgba(59, 130, 246, 0.35)",
           }}
         >
@@ -313,12 +372,12 @@ export default function DashboardPage() {
             </div>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-                <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "white" }}>Text to Audio AI</h3>
+                <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "var(--theme-text-main, #F8FAFC)" }}>Text to Audio AI</h3>
                 <span
                   style={{
                     fontSize: "0.68rem",
                     background: "#3B82F6",
-                    color: "#fff",
+                    color: "#FFFFFF",
                     fontWeight: 800,
                     padding: "2px 8px",
                     borderRadius: "20px",
@@ -328,8 +387,8 @@ export default function DashboardPage() {
                   NEW MVP
                 </span>
               </div>
-              <p style={{ fontSize: "0.85rem", color: "#94A3B8" }}>
-                Convert study notes and text files into high-quality speech powered by Gemini.
+              <p style={{ fontSize: "0.85rem", color: "var(--theme-text-sub, #94A3B8)" }}>
+                Convert study notes and text files into high-quality speech, right in your browser.
               </p>
             </div>
           </div>
@@ -337,7 +396,7 @@ export default function DashboardPage() {
             href="/audio"
             style={{
               background: "linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)",
-              color: "#fff",
+              color: "#FFFFFF",
               padding: "10px 20px",
               borderRadius: "12px",
               fontWeight: 800,
@@ -379,10 +438,10 @@ export default function DashboardPage() {
           }}
         >
           <ContinueReading books={BOOKS} />
-          <RecentTests tests={recentTests} />
+          <RecentTests tests={recentTests} dateFormat={dateFormat} />
         </div>
 
-        <FocusAreas weakTopics={WEAK} />
+        <FocusAreas weakTopics={WEAK} exam={USER.exam} />
 
         {/* Quick stats footer */}
         <footer
@@ -394,25 +453,25 @@ export default function DashboardPage() {
           }}
         >
           <div style={{ ...G.card, padding: "20px" }}>
-            <p style={{ color: "#94A3B8", fontSize: ".8rem", marginBottom: "8px" }}>Tasks Completed</p>
-            <h2 style={{ fontSize: "2rem", fontWeight: 800 }}>
-              {TASKS.filter((t: any) => t.done).length}
+            <p style={{ color: "var(--theme-text-sub, #94A3B8)", fontSize: ".8rem", marginBottom: "8px" }}>Tasks Completed</p>
+            <h2 style={{ fontSize: "2rem", fontWeight: 800, color: "var(--theme-text-main, #F8FAFC)" }}>
+              {TASKS.filter((t) => t.done).length}
             </h2>
           </div>
 
           <div style={{ ...G.card, padding: "20px" }}>
-            <p style={{ color: "#94A3B8", fontSize: ".8rem", marginBottom: "8px" }}>Books Reading</p>
-            <h2 style={{ fontSize: "2rem", fontWeight: 800 }}>{BOOKS.length}</h2>
+            <p style={{ color: "var(--theme-text-sub, #94A3B8)", fontSize: ".8rem", marginBottom: "8px" }}>Books Reading</p>
+            <h2 style={{ fontSize: "2rem", fontWeight: 800, color: "var(--theme-text-main, #F8FAFC)" }}>{BOOKS.length}</h2>
           </div>
 
           <div style={{ ...G.card, padding: "20px" }}>
-            <p style={{ color: "#94A3B8", fontSize: ".8rem", marginBottom: "8px" }}>Weak Subjects</p>
-            <h2 style={{ fontSize: "2rem", fontWeight: 800 }}>{WEAK.length}</h2>
+            <p style={{ color: "var(--theme-text-sub, #94A3B8)", fontSize: ".8rem", marginBottom: "8px" }}>Weak Subjects</p>
+            <h2 style={{ fontSize: "2rem", fontWeight: 800, color: "var(--theme-text-main, #F8FAFC)" }}>{WEAK.length}</h2>
           </div>
 
           <div style={{ ...G.card, padding: "20px" }}>
-            <p style={{ color: "#94A3B8", fontSize: ".8rem", marginBottom: "8px" }}>Study Streak</p>
-            <h2 style={{ fontSize: "2rem", fontWeight: 800, color: "#F59E0B" }}>🔥 {USER.streak}</h2>
+            <p style={{ color: "var(--theme-text-sub, #94A3B8)", fontSize: ".8rem", marginBottom: "8px" }}>Study Streak</p>
+            <h2 style={{ fontSize: "2rem", fontWeight: 800, color: "var(--theme-accent, #F59E0B)" }}>🔥 {USER.streak}</h2>
           </div>
         </footer>
       </main>
@@ -438,6 +497,7 @@ export default function DashboardPage() {
           .streak-day-dot { width: 28px !important; height: 28px !important; }
         }
       `}</style>
-    </div>
+      </div>
+    </>
   );
 }

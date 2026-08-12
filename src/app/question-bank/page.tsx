@@ -3,20 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { TEST_LOOKUP, TestMeta } from "@/lib/questionBank";
+import { gradAmber, gradTextAmber } from "@/lib/theme";
+import BackToDashboardLink from "@/components/common/BackToDashboardLink";
 
-const G = {
-  grad: "linear-gradient(135deg,#F59E0B,#FBBF24)",
-  gradText: {
-    background: "linear-gradient(135deg,#F59E0B,#FBBF24)",
-    WebkitBackgroundClip: "text",
-    WebkitTextFillColor: "transparent",
-  },
-  card: {
-    background: "#0B1220",
-    border: "1px solid rgba(255,255,255,.06)",
-    borderRadius: "16px",
-  },
-};
+const G = { grad: gradAmber, gradText: gradTextAmber };
 
 const EXAM_LABELS: Record<TestMeta["exam"], string> = {
   jee: "JEE",
@@ -33,6 +23,17 @@ const FILTERS: Array<TestMeta["exam"] | "all"> = [
   "ssc",
 ];
 
+// Static theme-token style map — driven entirely by the shared --theme-* CSS
+// variables set on <html data-theme="dark|light">, so this page always mirrors
+// the dashboard toggle exactly with zero extra JS/state.
+const themeStyles = {
+  bg: "var(--theme-bg-main)",
+  color: "var(--theme-text-main)",
+  subText: "var(--theme-text-sub)",
+  cardBg: "var(--theme-card-bg)",
+  cardBorder: "1px solid var(--theme-border)",
+};
+
 export default function QuestionBankPage() {
   const [filter, setFilter] = useState<TestMeta["exam"] | "all">("all");
 
@@ -40,28 +41,40 @@ export default function QuestionBankPage() {
     (t) => filter === "all" || t.exam === filter
   );
 
+  const cardStyle: React.CSSProperties = {
+    background: themeStyles.cardBg,
+    border: themeStyles.cardBorder,
+    borderRadius: "16px",
+    transition: "background 0.3s, border 0.3s",
+    boxSizing: "border-box",
+  };
+
   return (
     <div
       style={{
         minHeight: "100vh",
-        background: "#080C14",
-        color: "white",
+        background: themeStyles.bg,
+        color: themeStyles.color,
         fontFamily: "'DM Sans',sans-serif",
-        padding: "32px",
+        padding: "clamp(16px, 4vw, 32px)",
+        transition: "background 0.3s, color 0.3s",
+        boxSizing: "border-box",
       }}
     >
       <div style={{ maxWidth: "1000px", margin: "0 auto" }}>
         <header style={{ marginBottom: "28px" }}>
+          <BackToDashboardLink />
           <h1
             style={{
-              fontSize: "2rem",
+              fontSize: "clamp(1.6rem, 3vw, 2rem)",
               fontWeight: 800,
               marginBottom: "8px",
+              color: themeStyles.color,
             }}
           >
             Question <span style={G.gradText}>Bank</span>
           </h1>
-          <p style={{ color: "#94A3B8", fontSize: ".95rem" }}>
+          <p style={{ color: themeStyles.subText, fontSize: ".95rem" }}>
             Practice tests organized by exam. Pick one and start attempting.
           </p>
         </header>
@@ -81,17 +94,15 @@ export default function QuestionBankPage() {
               style={{
                 padding: "8px 16px",
                 borderRadius: "999px",
-                border:
-                  filter === f
-                    ? "1px solid transparent"
-                    : "1px solid rgba(255,255,255,.1)",
+                border: filter === f ? "1px solid transparent" : "1px solid var(--theme-border)",
                 background: filter === f ? G.grad : "transparent",
-                color: filter === f ? "#111827" : "#94A3B8",
+                color: filter === f ? "var(--theme-accent-text)" : themeStyles.subText,
                 fontWeight: 700,
                 fontSize: ".82rem",
                 cursor: "pointer",
                 textTransform: "uppercase",
                 letterSpacing: ".03em",
+                transition: "all 0.2s",
               }}
             >
               {f === "all" ? "All" : EXAM_LABELS[f]}
@@ -102,10 +113,10 @@ export default function QuestionBankPage() {
         {tests.length === 0 ? (
           <div
             style={{
-              ...G.card,
+              ...cardStyle,
               padding: "40px",
               textAlign: "center",
-              color: "#64748B",
+              color: themeStyles.subText,
             }}
           >
             No tests found for this exam yet.
@@ -123,10 +134,10 @@ export default function QuestionBankPage() {
                 key={test.id}
                 href={`/mock-tests/${test.id}`}
                 style={{
-                  ...G.card,
+                  ...cardStyle,
                   padding: "20px",
                   textDecoration: "none",
-                  color: "white",
+                  color: themeStyles.color,
                   display: "block",
                 }}
               >
@@ -136,15 +147,17 @@ export default function QuestionBankPage() {
                     justifyContent: "space-between",
                     alignItems: "center",
                     marginBottom: "10px",
+                    flexWrap: "wrap",
+                    gap: "6px",
                   }}
                 >
                   <span
                     style={{
                       fontSize: ".68rem",
                       fontWeight: 700,
-                      color: "#F59E0B",
-                      background: "rgba(245,158,11,.1)",
-                      border: "1px solid rgba(245,158,11,.2)",
+                      color: "var(--theme-accent)",
+                      background: "var(--theme-accent-soft)",
+                      border: "1px solid var(--theme-accent-border)",
                       borderRadius: "100px",
                       padding: "2px 10px",
                       textTransform: "uppercase",
@@ -172,6 +185,7 @@ export default function QuestionBankPage() {
                     fontWeight: 700,
                     marginBottom: "10px",
                     lineHeight: 1.4,
+                    color: themeStyles.color,
                   }}
                 >
                   {test.title}
@@ -182,7 +196,7 @@ export default function QuestionBankPage() {
                     display: "flex",
                     alignItems: "center",
                     gap: "6px",
-                    color: "#64748B",
+                    color: themeStyles.subText,
                     fontSize: ".82rem",
                   }}
                 >
@@ -194,6 +208,10 @@ export default function QuestionBankPage() {
           </div>
         )}
       </div>
+
+      <style>{`
+        @media(max-width:600px){div[style*="repeat(auto-fill"]{grid-template-columns:1fr!important}}
+      `}</style>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@config "../../tailwind.config.js";
 * {
   margin: 0;
   padding: 0;
@@ -25,4 +26,12 @@ body {
 ::-webkit-scrollbar-thumb {
   background: #F59E0B;
   border-radius: 3px;
+}
+
+/* Used by loading spinners across the app (Loader2 icons with inline
+   `animation: "spin 1s linear infinite"` in settings, dashboard, etc.) —
+   without this, those spinners render frozen instead of animating. */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }

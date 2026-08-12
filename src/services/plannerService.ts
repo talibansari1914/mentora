@@ -1,5 +1,16 @@
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase";
 import { authService } from "./authService";
+import { createInFlightDeduper } from "@/lib/asyncCache";
+
+// Same cookie-aware singleton client as authService/middleware/server —
+// created explicitly here (instead of importing the old backward-compat
+// `supabase` export) so this file's session source is unambiguous.
+const supabase = createClient();
+
+// Deduping getUserId() so that any concurrent calls to this class's
+// user-scoped methods (e.g. via Promise.all) share a single auth check
+// instead of each opening their own — see src/lib/asyncCache.ts.
+const dedupeUserId = createInFlightDeduper<string>();
 
 export interface Task {
   id: string;
@@ -21,13 +32,15 @@ export interface NewTask {
 
 class PlannerService {
   private async getUserId() {
-    const user = await authService.getCurrentUser();
+    return dedupeUserId("user-id", async () => {
+      const user = await authService.getCurrentUser();
 
-    if (!user) {
-      throw new Error("User not authenticated.");
-    }
+      if (!user) {
+        throw new Error("User not authenticated.");
+      }
 
-    return user.id;
+      return user.id;
+    });
   }
 
   // ==========================
@@ -74,10 +87,13 @@ class PlannerService {
   // ==========================
 
   async toggleDone(id: string, done: boolean): Promise<Task> {
+    const userId = await this.getUserId();
+
     const { data, error } = await supabase
       .from("tasks")
       .update({ done })
       .eq("id", id)
+      .eq("user_id", userId)
       .select()
       .single();
 
@@ -91,7 +107,13 @@ class PlannerService {
   // ==========================
 
   async deleteTask(id: string): Promise<boolean> {
-    const { error } = await supabase.from("tasks").delete().eq("id", id);
+    const userId = await this.getUserId();
+
+    const { error } = await supabase
+      .from("tasks")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", userId);
 
     if (error) throw error;
 
@@ -118,7 +140,7 @@ class PlannerService {
 
     if (!data || data.length === 0) return 0;
 
-    const ids = data.map((t) => t.id);
+    const ids = data.map((t: { id: string }) => t.id);
 
     const { error: updateError } = await supabase
       .from("tasks")

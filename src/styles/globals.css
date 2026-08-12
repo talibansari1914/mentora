@@ -1,0 +1,60 @@
+/* Dark Mode (Default) */
+:root,
+[data-theme="dark"] {
+  --theme-bg-main: #080c14;
+  --theme-card-bg: #0f172a;
+  --theme-sidebar-bg: #0a0d14;
+  --theme-card-bg-alt: linear-gradient(135deg, rgba(245, 158, 11, 0.05) 0%, rgba(15, 23, 42, 0.6) 100%);
+  --theme-text-main: #f8fafc;
+  --theme-text-sub: #94a3b8;
+  --theme-muted-text: #64748b;
+  --theme-accent: #f59e0b;
+  --theme-accent-soft: rgba(245, 158, 11, 0.12);
+  --theme-accent-border: rgba(245, 158, 11, 0.35);
+  --theme-accent-glow: rgba(245, 158, 11, 0.3);
+  --theme-border: rgba(255, 255, 255, 0.08);
+  --theme-hover-bg: rgba(255, 255, 255, 0.04);
+  --theme-accent-text: #070B14;
+}
+
+/* Light Mode */
+[data-theme="light"] {
+  --theme-bg-main: #f1f5f9;
+  --theme-card-bg: #ffffff;
+  --theme-sidebar-bg: #ffffff;
+  --theme-card-bg-alt: rgba(245, 158, 11, 0.06);
+  --theme-text-main: #0f172a;
+  --theme-text-sub: #475569;
+  --theme-muted-text: #64748b;
+  --theme-accent: #d97706;
+  --theme-accent-soft: rgba(217, 119, 6, 0.12);
+  --theme-accent-border: rgba(217, 119, 6, 0.35);
+  --theme-accent-glow: rgba(217, 119, 6, 0.25);
+  --theme-border: rgba(0, 0, 0, 0.08);
+  --theme-hover-bg: rgba(0, 0, 0, 0.04);
+  --theme-accent-text: #FFFFFF;
+}
+
+/* ⚡️ FAST & LIGHTWEIGHT TRANSITION (No lag) ⚡️ */
+body,
+aside,
+header,
+main,
+section,
+.dashboard-sidebar,
+.dashboard-card {
+  transition: background-color 0.18s ease-out, border-color 0.18s ease-out, color 0.18s ease-out;
+}
+
+/* Loading spinners across the app (Loader2 icon with
+   animation: "spin 1s linear infinite") reference this keyframe by name.
+   It was never defined anywhere, so every one of those spinners sat frozen
+   instead of rotating. Defining it once here fixes all of them at once. */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

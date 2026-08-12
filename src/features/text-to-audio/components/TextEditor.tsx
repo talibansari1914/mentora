@@ -2,29 +2,31 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { TextToAudioConfigState } from '../types';
+import { MAX_TEXT_CHARACTER_LIMIT } from '../constants/config';
 import { FileText, Trash2, Upload, Clipboard } from 'lucide-react';
 
 export interface TextEditorProps {
   config?: TextToAudioConfigState;
-  onChange: (key: keyof TextToAudioConfigState, value: any) => void;
+  onChange: <K extends keyof TextToAudioConfigState>(key: K, value: TextToAudioConfigState[K]) => void;
 }
 
 export const TextEditor: React.FC<TextEditorProps> = ({ config, onChange }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Internal state prevents box from freezing
-  const [localText, setLocalText] = useState<string>(config?.text || '');
+  const [localText, setLocalText] = useState<string>((config?.text || '').slice(0, MAX_TEXT_CHARACTER_LIMIT));
 
   // Keep localText synced with parent config
   useEffect(() => {
     if (config?.text !== undefined && config.text !== localText) {
-      setLocalText(config.text);
+      setLocalText(config.text.slice(0, MAX_TEXT_CHARACTER_LIMIT));
     }
   }, [config?.text]);
 
-  // Handle manual typing
+  // Handle manual typing — enforced with maxLength on the textarea below too,
+  // this is the belt-and-braces check for paths that set value programmatically.
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const value = e.target.value;
+    const value = e.target.value.slice(0, MAX_TEXT_CHARACTER_LIMIT);
     setLocalText(value);
     onChange('text', value);
   };
@@ -40,9 +42,13 @@ export const TextEditor: React.FC<TextEditorProps> = ({ config, onChange }) => {
     try {
       const clipText = await navigator.clipboard.readText();
       if (clipText) {
-        const updated = localText ? `${localText}\n${clipText}` : clipText;
+        const combined = localText ? `${localText}\n${clipText}` : clipText;
+        const updated = combined.slice(0, MAX_TEXT_CHARACTER_LIMIT);
         setLocalText(updated);
         onChange('text', updated);
+        if (combined.length > MAX_TEXT_CHARACTER_LIMIT) {
+          alert(`Pasted text was trimmed to the ${MAX_TEXT_CHARACTER_LIMIT}-character limit.`);
+        }
       }
     } catch (err) {
       alert("Clipboard access denied by browser. Please click inside the box and press Ctrl+V / Cmd+V.");
@@ -72,7 +78,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({ config, onChange }) => {
         for (let i = 1; i <= pdfDoc.numPages; i++) {
           const page = await pdfDoc.getPage(i);
           const textContent = await page.getTextContent();
-          const pageText = textContent.items.map((item: any) => item.str).join(' ');
+          const pageText = textContent.items.map((item) => ("str" in item ? item.str : "")).join(' ');
           fullText += pageText + '\n\n';
         }
 
@@ -83,9 +89,13 @@ export const TextEditor: React.FC<TextEditorProps> = ({ config, onChange }) => {
           return;
         }
 
-        const updated = localText ? `${localText}\n\n${cleanContent}` : cleanContent;
+        const combined = localText ? `${localText}\n\n${cleanContent}` : cleanContent;
+        const updated = combined.slice(0, MAX_TEXT_CHARACTER_LIMIT);
         setLocalText(updated);
         onChange('text', updated);
+        if (combined.length > MAX_TEXT_CHARACTER_LIMIT) {
+          alert(`This PDF's text was trimmed to the ${MAX_TEXT_CHARACTER_LIMIT}-character limit.`);
+        }
       } catch (error) {
         console.error("Error parsing PDF:", error);
         alert("Failed to read PDF content. Please copy-paste text directly.");
@@ -105,9 +115,13 @@ export const TextEditor: React.FC<TextEditorProps> = ({ config, onChange }) => {
             return;
           }
 
-          const updated = localText ? `${localText}\n\n${cleanContent}` : cleanContent;
+          const combined = localText ? `${localText}\n\n${cleanContent}` : cleanContent;
+          const updated = combined.slice(0, MAX_TEXT_CHARACTER_LIMIT);
           setLocalText(updated);
           onChange('text', updated);
+          if (combined.length > MAX_TEXT_CHARACTER_LIMIT) {
+            alert(`This file's text was trimmed to the ${MAX_TEXT_CHARACTER_LIMIT}-character limit.`);
+          }
         }
       };
 
@@ -130,8 +144,8 @@ export const TextEditor: React.FC<TextEditorProps> = ({ config, onChange }) => {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <FileText size={18} style={{ color: "#3B82F6" }} />
-          <span style={{ fontSize: "0.9rem", fontWeight: 700, color: "#F8FAFC" }}>
+          <FileText size={18} style={{ color: "var(--theme-accent, #f59e0b)" }} />
+          <span style={{ fontSize: "0.9rem", fontWeight: 700, color: "var(--theme-text-main, #f8fafc)" }}>
             Input Text or Document Content
           </span>
         </div>
@@ -150,9 +164,9 @@ export const TextEditor: React.FC<TextEditorProps> = ({ config, onChange }) => {
             type="button"
             onClick={() => fileInputRef.current?.click()}
             style={{
-              background: "rgba(59, 130, 246, 0.15)",
-              border: "1px solid rgba(59, 130, 246, 0.3)",
-              color: "#3B82F6",
+              background: "var(--theme-accent-soft, rgba(245,158,11,0.12))",
+              border: "1px solid var(--theme-accent-border, rgba(245,158,11,0.35))",
+              color: "var(--theme-accent, #f59e0b)",
               padding: "6px 12px",
               borderRadius: "8px",
               fontSize: "0.78rem",
@@ -170,9 +184,9 @@ export const TextEditor: React.FC<TextEditorProps> = ({ config, onChange }) => {
             type="button"
             onClick={handleClipboardPaste}
             style={{
-              background: "rgba(255, 255, 255, 0.05)",
-              border: "1px solid rgba(255, 255, 255, 0.1)",
-              color: "#F8FAFC",
+              background: "var(--theme-hover-bg, rgba(255,255,255,0.04))",
+              border: "1px solid var(--theme-border, rgba(255,255,255,0.08))",
+              color: "var(--theme-text-main, #f8fafc)",
               padding: "6px 12px",
               borderRadius: "8px",
               fontSize: "0.78rem",
@@ -215,18 +229,20 @@ export const TextEditor: React.FC<TextEditorProps> = ({ config, onChange }) => {
           onChange={handleTextChange}
           placeholder="Type here, paste text using Ctrl+V or the Paste button, or upload a document file..."
           rows={7}
+          maxLength={MAX_TEXT_CHARACTER_LIMIT}
           style={{
             width: "100%",
-            background: "#0B132B",
-            border: "1px solid rgba(255, 255, 255, 0.1)",
+            background: "var(--theme-bg-main, #080c14)",
+            border: "1px solid var(--theme-border, rgba(255,255,255,0.08))",
             borderRadius: "12px",
             padding: "14px 16px",
-            color: "#F8FAFC",
+            color: "var(--theme-text-main, #f8fafc)",
             fontSize: "0.92rem",
             lineHeight: "1.6",
             outline: "none",
             resize: "vertical",
-            fontFamily: "inherit"
+            fontFamily: "inherit",
+            boxSizing: "border-box",
           }}
         />
 
@@ -236,11 +252,12 @@ export const TextEditor: React.FC<TextEditorProps> = ({ config, onChange }) => {
             bottom: "12px",
             right: "14px",
             fontSize: "0.75rem",
-            color: "#64748B",
+            color: localText.length >= MAX_TEXT_CHARACTER_LIMIT ? "#EF4444" : "var(--theme-muted-text, #64748b)",
+            fontWeight: localText.length >= MAX_TEXT_CHARACTER_LIMIT ? 700 : 400,
             pointerEvents: "none"
           }}
         >
-          {localText.length} chars
+          {localText.length} / {MAX_TEXT_CHARACTER_LIMIT} chars
         </div>
       </div>
     </div>

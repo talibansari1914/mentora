@@ -1,28 +1,34 @@
 "use client";
 
 import Link from "next/link";
-import { G } from "@/constants/colors";
-import { NAV_ITEMS, TOOLS_ITEMS, NavItem } from "@/constants/navigation";
+import { NAV_ITEMS, TOOLS_ITEMS, NavItem, filterNavItemsByExam } from "@/constants/navigation";
 
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
   userPlan: string;
+  // The user's exam (e.g. "UPSC", "GATE") - used to filter which nav
+  // items show up. See filterNavItemsByExam() in constants/navigation.ts
+  // for exactly which items are exam-restricted and why.
+  exam?: string;
+  // Hides the "Upgrade Now" upsell box for users who already have
+  // Premium - showing it to a paying customer looks like a bug, not
+  // an upsell.
+  isPremium?: boolean;
 }
 
-// Renders one labeled group of nav links (e.g. "MAIN" or "TOOLS").
 function NavSection({ label, items }: { label: string; items: NavItem[] }) {
   return (
-    <div style={{ marginBottom: "8px" }}>
+    <div style={{ marginBottom: "12px" }}>
       <p
         style={{
-          fontSize: "0.62rem",
+          fontSize: "0.65rem",
           fontWeight: 700,
-          letterSpacing: "0.1em",
+          letterSpacing: "0.12em",
           textTransform: "uppercase",
-          color: "#334155",
+          color: "var(--theme-muted-text, #475569)",
           padding: "0 12px",
-          marginBottom: "4px",
+          marginBottom: "6px",
         }}
       >
         {label}
@@ -35,47 +41,58 @@ function NavSection({ label, items }: { label: string; items: NavItem[] }) {
           style={{
             display: "flex",
             alignItems: "center",
-            gap: "10px",
-            padding: "9px 12px",
-            borderRadius: "10px",
-            marginBottom: "2px",
+            gap: "12px",
+            padding: "10px 14px",
+            borderRadius: "12px",
+            marginBottom: "3px",
             textDecoration: "none",
             fontSize: "0.875rem",
-            fontWeight: 500,
-            color: item.active ? "#F59E0B" : "#64748B",
-            background: item.active ? "rgba(245,158,11,0.08)" : "transparent",
-            transition: "all 0.18s",
+            fontWeight: item.active ? 600 : 500,
+            color: item.active
+              ? "var(--theme-accent, #F59E0B)"
+              : "var(--theme-text-sub, #94A3B8)",
+            background: item.active
+              ? "var(--theme-accent-soft, rgba(245, 158, 11, 0.12))"
+              : "transparent",
+            boxShadow: item.active
+              ? "inset 0 0 0 1px var(--theme-accent-border, rgba(245, 158, 11, 0.25))"
+              : "none",
             position: "relative",
           }}
           onMouseEnter={(e) => {
             if (!item.active) {
-              (e.currentTarget as HTMLElement).style.background = "#1A2640";
-              (e.currentTarget as HTMLElement).style.color = "#CBD5E1";
+              (e.currentTarget as HTMLElement).style.background =
+                "var(--theme-hover-bg, rgba(255, 255, 255, 0.05))";
+              (e.currentTarget as HTMLElement).style.color =
+                "var(--theme-text-main, #F8FAFC)";
             }
           }}
           onMouseLeave={(e) => {
             if (!item.active) {
               (e.currentTarget as HTMLElement).style.background = "transparent";
-              (e.currentTarget as HTMLElement).style.color = "#64748B";
+              (e.currentTarget as HTMLElement).style.color =
+                "var(--theme-text-sub, #94A3B8)";
             }
           }}
         >
-          {/* Active-page indicator bar on the left edge */}
           {item.active && (
             <div
               style={{
                 position: "absolute",
                 left: 0,
-                top: "20%",
-                bottom: "20%",
-                width: "3px",
-                borderRadius: "0 2px 2px 0",
-                background: G.grad,
+                top: "15%",
+                bottom: "15%",
+                width: "3.5px",
+                borderRadius: "0 4px 4px 0",
+                background: "var(--theme-accent-gradient, linear-gradient(135deg, #F59E0B, #D97706))",
+                boxShadow: "0 0 8px var(--theme-accent-glow, rgba(245, 158, 11, 0.6))",
               }}
             />
           )}
 
-          <span style={{ fontSize: "1rem", flexShrink: 0 }}>{item.icon}</span>
+          <span style={{ fontSize: "1.05rem", flexShrink: 0, display: "flex", alignItems: "center" }}>
+            {item.icon}
+          </span>
           <span
             style={{
               flex: 1,
@@ -91,13 +108,13 @@ function NavSection({ label, items }: { label: string; items: NavItem[] }) {
           {item.badge && (
             <span
               style={{
-                fontSize: "0.6rem",
-                fontWeight: 700,
-                color: "#F59E0B",
-                background: "rgba(245,158,11,0.1)",
-                border: "1px solid rgba(245,158,11,0.2)",
+                fontSize: "0.62rem",
+                fontWeight: 800,
+                color: "var(--theme-accent, #F59E0B)",
+                background: "var(--theme-accent-soft, rgba(245, 158, 11, 0.12))",
+                border: "1px solid var(--theme-accent-border, rgba(245, 158, 11, 0.25))",
                 borderRadius: "100px",
-                padding: "2px 7px",
+                padding: "2px 8px",
                 flexShrink: 0,
               }}
             >
@@ -108,13 +125,13 @@ function NavSection({ label, items }: { label: string; items: NavItem[] }) {
           {item.pro && (
             <span
               style={{
-                fontSize: "0.6rem",
-                fontWeight: 700,
-                color: "#818CF8",
-                background: "rgba(99,102,241,0.12)",
-                border: "1px solid rgba(99,102,241,0.2)",
+                fontSize: "0.62rem",
+                fontWeight: 800,
+                color: "#A78BFA",
+                background: "rgba(167, 139, 250, 0.12)",
+                border: "1px solid rgba(167, 139, 250, 0.25)",
                 borderRadius: "100px",
-                padding: "2px 7px",
+                padding: "2px 8px",
                 flexShrink: 0,
               }}
             >
@@ -127,12 +144,12 @@ function NavSection({ label, items }: { label: string; items: NavItem[] }) {
   );
 }
 
-export default function Sidebar({ isOpen, onClose, userPlan }: SidebarProps) {
+export default function Sidebar({ isOpen, onClose, userPlan, exam, isPremium }: SidebarProps) {
+  const visibleNavItems = filterNavItemsByExam(NAV_ITEMS, exam);
+  const visibleToolsItems = filterNavItemsByExam(TOOLS_ITEMS, exam);
+
   return (
     <>
-      {/* Dark overlay behind the sidebar on mobile — tapping it closes the menu.
-          Hidden on desktop via CSS (see dashboard-overlay class in page.tsx's
-          responsive stylesheet) since the sidebar is always visible there. */}
       {isOpen && (
         <div
           className="dashboard-overlay"
@@ -140,97 +157,109 @@ export default function Sidebar({ isOpen, onClose, userPlan }: SidebarProps) {
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,.45)",
+            background: "rgba(0, 0, 0, 0.65)",
+            backdropFilter: "blur(4px)",
             zIndex: 90,
           }}
         />
       )}
 
-      {/* NOTE: `left` here is the MOBILE default (hidden unless toggled open).
-          On desktop, the "dashboard-sidebar" class forces left:0 regardless
-          of `isOpen` — see the @media rule in page.tsx — so the sidebar is
-          always visible on larger screens without needing the hamburger. */}
       <aside
         className="dashboard-sidebar"
         style={{
           width: "280px",
-          background: "#0B1220",
-          borderRight: "1px solid rgba(255,255,255,.06)",
-          padding: "20px 16px",
+          background: "var(--theme-sidebar-bg, #0A0D14)",
+          borderRight: "1px solid var(--theme-border, rgba(255, 255, 255, 0.07))",
+          padding: "24px 18px",
           position: "fixed",
           left: isOpen ? 0 : "-300px",
           top: 0,
           bottom: 0,
           zIndex: 100,
-          transition: ".25s ease",
+          transition: "left 0.25s ease-out",
           overflowY: "auto",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
         }}
       >
-        {/* Logo */}
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "26px" }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: "30px", paddingLeft: "4px" }}>
+            <div
+              style={{
+                width: "44px",
+                height: "44px",
+                borderRadius: "14px",
+                background: "var(--theme-accent-gradient, linear-gradient(135deg, #F59E0B 0%, #D97706 100%))",
+                display: "grid",
+                placeItems: "center",
+                color: "var(--theme-accent-text, #000000)",
+                fontWeight: 900,
+                fontSize: "1.2rem",
+                flexShrink: 0,
+                boxShadow: "0 4px 16px var(--theme-accent-glow, rgba(245, 158, 11, 0.35))",
+              }}
+            >
+              M
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 800, fontSize: "1.15rem", color: "var(--theme-text-main, #F8FAFC)" }}>
+                Mentora
+              </div>
+              <div style={{ color: "var(--theme-text-sub, #64748B)", fontSize: "0.78rem", fontWeight: 500 }}>
+                Learn Smarter
+              </div>
+            </div>
+          </div>
+
+          <NavSection label="MAIN" items={visibleNavItems} />
+          <NavSection label="TOOLS" items={visibleToolsItems} />
+        </div>
+
+        {!isPremium && (
           <div
             style={{
-              width: "46px",
-              height: "46px",
-              borderRadius: "14px",
-              background: G.grad,
-              display: "grid",
-              placeItems: "center",
-              color: "#111827",
-              fontWeight: 800,
-              fontSize: "1.05rem",
-              flexShrink: 0,
+              marginTop: "28px",
+              padding: "18px",
+              borderRadius: "18px",
+              background: "var(--theme-card-bg-alt, rgba(245, 158, 11, 0.05))",
+              border: "1px solid var(--theme-accent-border, rgba(245, 158, 11, 0.2))",
+              position: "relative",
+              overflow: "hidden",
             }}
           >
-            M
+            <div style={{ fontSize: "0.72rem", color: "var(--theme-accent, #F59E0B)", fontWeight: 800, marginBottom: "6px", textTransform: "uppercase" }}>
+              {userPlan}
+            </div>
+            <h4 style={{ fontSize: "0.95rem", marginBottom: "6px", fontWeight: 700, color: "var(--theme-text-main, #F8FAFC)" }}>
+              Unlock Premium Features
+            </h4>
+            <p style={{ color: "var(--theme-text-sub, #94A3B8)", fontSize: "0.78rem", lineHeight: 1.5, marginBottom: "16px" }}>
+              Access AI Mentor, Unlimited Mock Tests, Notes Generator and Advanced Analytics.
+            </p>
+            <a
+              href="/upgrade"
+              style={{
+                display: "block",
+                width: "100%",
+                background: "var(--theme-accent-gradient, linear-gradient(135deg, #F59E0B 0%, #D97706 100%))",
+                border: "none",
+                color: "var(--theme-accent-text, #000000)",
+                padding: "11px",
+                borderRadius: "12px",
+                cursor: "pointer",
+                fontWeight: 800,
+                fontSize: "0.85rem",
+                boxShadow: "0 4px 14px var(--theme-accent-glow, rgba(245, 158, 11, 0.25))",
+                textAlign: "center",
+                textDecoration: "none",
+                boxSizing: "border-box",
+              }}
+            >
+              Upgrade Now
+            </a>
           </div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: "1.1rem" }}>Mentora</div>
-            <div style={{ color: "#94A3B8", fontSize: ".78rem" }}>Learn Smarter</div>
-          </div>
-        </div>
-
-        <NavSection label="MAIN" items={NAV_ITEMS} />
-        <NavSection label="TOOLS" items={TOOLS_ITEMS} />
-
-        {/* Upgrade-to-premium promo card */}
-        <div
-          style={{
-            marginTop: "28px",
-            padding: "16px",
-            borderRadius: "16px",
-            background: "linear-gradient(135deg,#1E293B,#0F172A)",
-            border: "1px solid rgba(245,158,11,.12)",
-          }}
-        >
-          <div style={{ fontSize: ".72rem", color: "#F59E0B", fontWeight: 700, marginBottom: "8px" }}>
-            {userPlan}
-          </div>
-          <h4 style={{ fontSize: ".95rem", marginBottom: "8px", fontWeight: 700 }}>
-            Unlock Premium Features
-          </h4>
-          <p style={{ color: "#94A3B8", fontSize: ".78rem", lineHeight: 1.5, marginBottom: "14px" }}>
-            Access AI Mentor, Unlimited Mock Tests, Notes Generator and Advanced Analytics.
-          </p>
-          <button
-            onClick={() => alert("Premium plans are coming soon!")}
-            style={{
-              width: "100%",
-              background: G.grad,
-              border: "none",
-              color: "#111827",
-              padding: "11px",
-              borderRadius: "10px",
-              cursor: "pointer",
-              fontWeight: 700,
-              transition: "opacity .15s",
-            }}
-            onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.opacity = "0.9")}
-            onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.opacity = "1")}
-          >
-            Upgrade
-          </button>
-        </div>
+        )}
       </aside>
     </>
   );

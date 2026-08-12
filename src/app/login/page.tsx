@@ -1,14 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase"; // Browser client instance
 import { Zap, Eye, EyeOff } from "lucide-react";
+import { Turnstile } from "@/components/auth/Turnstile";
 
-export default function LoginPage() {
+// Only allow same-origin relative paths (e.g. "/library") as a redirect
+// target — never an absolute URL or a protocol-relative "//host" one. This
+// blocks someone crafting a ?next=https://evil.com link that would otherwise
+// send a logged-in user off-site (an "open redirect").
+function safeNext(raw: string | null): string {
+  if (!raw) return "/dashboard";
+  if (!raw.startsWith("/") || raw.startsWith("//")) return "/dashboard";
+  return raw;
+}
+
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
+
+  const nextPath = safeNext(searchParams.get("next"));
+  const signupHref = nextPath !== "/dashboard" ? `/signup?next=${encodeURIComponent(nextPath)}` : "/signup";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -17,6 +32,7 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [unconfirmedEmail, setUnconfirmedEmail] = useState(false);
   const [resendStatus, setResendStatus] = useState<"idle" | "sending" | "sent">("idle");
+  const [captchaToken, setCaptchaToken] = useState<string | undefined>(undefined);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,7 +41,16 @@ export default function LoginPage() {
     setUnconfirmedEmail(false);
     setResendStatus("idle");
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+      options: { captchaToken },
+    });
+
+    // Turnstile tokens are single-use - clear it so a retry after a failed
+    // login (wrong password, etc.) waits for the widget to issue a fresh one
+    // rather than silently reusing an already-consumed token.
+    setCaptchaToken(undefined);
 
     if (error) {
       if (error.message.toLowerCase().includes("email not confirmed")) {
@@ -34,9 +59,9 @@ export default function LoginPage() {
       setError(error.message);
       setLoading(false);
     } else {
-      // Cookies Sync ke liye pehle refresh karo, fir dashboard bhejo
+      // Refresh first to sync cookies, then navigate to the target page
       router.refresh();
-      router.push("/dashboard");
+      router.push(nextPath);
     }
   };
 
@@ -50,8 +75,11 @@ export default function LoginPage() {
   const handleGoogle = async () => {
     await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { 
-        redirectTo: `${window.location.origin}/auth/callback` // Server callback route par bhejega
+      options: {
+        // /auth/callback already reads its own "next" query param and
+        // forwards there after exchanging the OAuth code — see
+        // src/app/auth/callback/route.ts.
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`,
       },
     });
   };
@@ -110,7 +138,7 @@ export default function LoginPage() {
             <p style={{ fontSize: "0.85rem", fontWeight: 600, color: "rgba(17, 24, 39, 0.85)", marginBottom: "10px" }}>
               New Here?
             </p>
-            <Link href="/signup" style={{ display: "inline-block", width: "100%", padding: "12px 24px", background: "rgba(17, 24, 39, 0.1)", border: "1px solid rgba(17, 24, 39, 0.2)", borderRadius: "24px", color: "#111827", fontSize: "0.85rem", fontWeight: 700, textDecoration: "none", letterSpacing: "0.08em", boxShadow: "0 4px 12px rgba(0,0,0,0.05)", boxSizing: "border-box" }}>
+            <Link href={signupHref} style={{ display: "inline-block", width: "100%", padding: "12px 24px", background: "rgba(17, 24, 39, 0.1)", border: "1px solid rgba(17, 24, 39, 0.2)", borderRadius: "24px", color: "#111827", fontSize: "0.85rem", fontWeight: 700, textDecoration: "none", letterSpacing: "0.08em", boxShadow: "0 4px 12px rgba(0,0,0,0.05)", boxSizing: "border-box" }}>
               SIGN UP
             </Link>
           </div>
@@ -151,6 +179,14 @@ export default function LoginPage() {
               </button>
             </div>
 
+            {process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && (
+              <Turnstile
+                siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
+                onVerify={setCaptchaToken}
+                onExpire={() => setCaptchaToken(undefined)}
+              />
+            )}
+
             <div style={{ display: "flex", justifyContent: "center", marginTop: "6px", width: "100%" }}>
               <button type="submit" disabled={loading} style={{ width: "140px", padding: "12px", background: "#f1f5f9", border: "none", borderRadius: "20px", boxShadow: "5px 5px 10px rgba(0,0,0,0.2), -5px -5px 10px rgba(255,255,255,0.1)", color: "#1e293b", fontSize: "0.85rem", fontWeight: 700, cursor: "pointer", letterSpacing: "0.05em" }}>
                 {loading ? "LOADING..." : "LOGIN"}
@@ -181,5 +217,17 @@ export default function LoginPage() {
         }
       `}</style>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div style={{ minHeight: "100vh", background: "#f5a623" }} />
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

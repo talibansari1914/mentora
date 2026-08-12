@@ -1,8 +1,29 @@
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase";
 import { Book } from "@/types/book";
 
+// Same cookie-aware singleton client as authService/middleware/server —
+// created explicitly here (instead of importing the old backward-compat
+// `supabase` export) so this file's session source is unambiguous.
+const supabase = createClient();
+
+// Raw Supabase row shape (snake_case) for the `books` table.
+interface BookRow {
+  id: number;
+  title: string;
+  author: string;
+  exam: string;
+  type: string;
+  pages: number;
+  rating: number;
+  downloads: string;
+  icon: string;
+  is_new: boolean;
+  premium: boolean;
+  pdf_url: string | null;
+}
+
 // Converts a raw Supabase row (snake_case) into our Book type (camelCase).
-function mapRow(row: any): Book {
+function mapRow(row: BookRow): Book {
   return {
     id: row.id,
     title: row.title,

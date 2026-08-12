@@ -28,14 +28,37 @@ export default function ContinueReading({ books }: ContinueReadingProps) {
           gap: "8px",
         }}
       >
-        <h3 style={{ fontSize: "1.05rem", fontWeight: 700 }}>Continue Reading</h3>
-        <Link href="/library" style={{ color: "#F59E0B", fontSize: ".82rem", textDecoration: "none" }}>
+        <h3
+          style={{
+            fontSize: "1.05rem",
+            fontWeight: 700,
+            color: "var(--theme-text-main, #F8FAFC)",
+          }}
+        >
+          Continue Reading
+        </h3>
+        <Link
+          href="/library"
+          style={{
+            color: "var(--theme-accent, #F59E0B)",
+            fontSize: ".82rem",
+            fontWeight: 600,
+            textDecoration: "none",
+          }}
+        >
           View All
         </Link>
       </div>
 
       {books.length === 0 ? (
-        <p style={{ color: "#64748B", fontSize: ".85rem", textAlign: "center", padding: "20px 0" }}>
+        <p
+          style={{
+            color: "var(--theme-muted-text, #64748B)",
+            fontSize: ".85rem",
+            textAlign: "center",
+            padding: "20px 0",
+          }}
+        >
           No books in progress. Open one from the Library to start.
         </p>
       ) : (
@@ -44,14 +67,20 @@ export default function ContinueReading({ books }: ContinueReadingProps) {
             <div
               key={book.id}
               style={{
-                background: "#0F172A",
-                border: "1px solid rgba(255,255,255,.05)",
+                background: "var(--theme-hover-bg, rgba(255, 255, 255, 0.03))",
+                border: "1px solid var(--theme-border, rgba(255, 255, 255, 0.07))",
                 borderRadius: "14px",
                 padding: "16px",
-                transition: "border-color .15s",
+                transition: "border-color 0.2s ease",
               }}
-              onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.borderColor = "rgba(245,158,11,.2)")}
-              onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,.05)")}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.borderColor =
+                  "var(--theme-accent-border, rgba(245, 158, 11, 0.3))";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.borderColor =
+                  "var(--theme-border, rgba(255, 255, 255, 0.07))";
+              }}
             >
               <div
                 style={{
@@ -66,6 +95,7 @@ export default function ContinueReading({ books }: ContinueReadingProps) {
                   style={{
                     fontWeight: 700,
                     fontSize: ".95rem",
+                    color: "var(--theme-text-main, #F8FAFC)",
                     minWidth: 0,
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -74,7 +104,14 @@ export default function ContinueReading({ books }: ContinueReadingProps) {
                 >
                   {book.title}
                 </h4>
-                <span style={{ color: "#64748B", fontSize: ".8rem", flexShrink: 0 }}>
+                <span
+                  style={{
+                    color: "var(--theme-text-sub, #94A3B8)",
+                    fontSize: ".8rem",
+                    fontWeight: 500,
+                    flexShrink: 0,
+                  }}
+                >
                   Ch {book.chapter}/{book.totalChapters}
                 </span>
               </div>
@@ -82,16 +119,29 @@ export default function ContinueReading({ books }: ContinueReadingProps) {
               <div
                 style={{
                   height: "8px",
-                  background: "#1E293B",
+                  background: "var(--theme-border, #1E293B)",
                   borderRadius: "100px",
                   overflow: "hidden",
                   marginBottom: "8px",
                 }}
               >
-                <div style={{ width: `${book.progress}%`, height: "100%", background: G.grad }} />
+                <div
+                  style={{
+                    width: `${book.progress}%`,
+                    height: "100%",
+                    background: G.grad,
+                  }}
+                />
               </div>
 
-              <div style={{ textAlign: "right", color: "#94A3B8", fontSize: ".78rem" }}>
+              <div
+                style={{
+                  textAlign: "right",
+                  color: "var(--theme-text-sub, #94A3B8)",
+                  fontSize: ".78rem",
+                  fontWeight: 500,
+                }}
+              >
                 {book.progress}% Complete
               </div>
             </div>

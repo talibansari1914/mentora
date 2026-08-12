@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { Book } from "@/types/book";
 import BookCard from "./BookCard";
 
@@ -27,20 +28,36 @@ export default function BookGrid({
       <div
         style={{
           textAlign: "center",
-          padding: "60px 20px",
-          color: "#64748B",
-          fontSize: ".9rem",
-          border: "1px dashed rgba(255,255,255,.08)",
+          padding: "50px 24px",
+          color: "var(--theme-text-sub, #64748B)",
+          fontSize: "0.95rem",
+          fontWeight: 500,
+          background: "var(--theme-card-bg, #FFFFFF)",
+          border: "2px dashed var(--theme-border, #E2E8F0)",
           borderRadius: "16px",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "8px",
+          margin: "12px 0",
         }}
       >
-        {emptyMessage}
+        <span style={{ fontSize: "2.2rem", marginBottom: "4px" }}>📚</span>
+        <p style={{ margin: 0, color: "var(--theme-text-main, #475569)", fontWeight: 600 }}>{emptyMessage}</p>
       </div>
     );
   }
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: "18px" }}>
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))",
+        gap: "20px",
+        width: "100%",
+      }}
+    >
       {books.map((book) => (
         <BookCard
           key={book.id}

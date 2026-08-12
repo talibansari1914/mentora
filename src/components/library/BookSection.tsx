@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import Link from "next/link";
 import { Book } from "@/types/book";
 import BookCard from "./BookCard";
@@ -31,29 +32,85 @@ export default function BookSection({
 
   return (
     <section style={{ marginBottom: "36px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-        <h2 style={{ fontSize: "1.15rem", fontWeight: 800 }}>{title}</h2>
+      {/* Section Header */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "16px",
+        }}
+      >
+        <h2
+          style={{
+            fontSize: "1.2rem",
+            fontWeight: 800,
+            color: "var(--theme-text-main, #0F172A)",
+            margin: 0,
+            letterSpacing: "-0.01em",
+          }}
+        >
+          {title}
+        </h2>
         {viewAllHref && (
-          <Link href={viewAllHref} style={{ color: "#F59E0B", fontSize: ".82rem", textDecoration: "none" }}>
+          <Link
+            href={viewAllHref}
+            style={{
+              color: "var(--theme-accent, #B45309)",
+              fontSize: "0.85rem",
+              fontWeight: 700,
+              textDecoration: "none",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              transition: "color 0.15s ease",
+            }}
+          >
             View All →
           </Link>
         )}
       </div>
 
+      {/* Body Content */}
       {books.length === 0 ? (
-        <p style={{ color: "#64748B", fontSize: ".85rem" }}>{emptyMessage}</p>
+        <div
+          style={{
+            background: "var(--theme-card-bg, #FFFFFF)",
+            border: "1px dashed var(--theme-border, #E2E8F0)",
+            borderRadius: "12px",
+            padding: "24px 16px",
+            textAlign: "center",
+            color: "var(--theme-text-sub, #64748B)",
+            fontSize: "0.88rem",
+            fontWeight: 500,
+          }}
+        >
+          {emptyMessage}
+        </div>
       ) : (
-        // Horizontal scroll row — CSS-only, no extra library needed.
+        /* Horizontal scroll row — Touch-friendly & Responsive */
         <div
           style={{
             display: "flex",
             gap: "16px",
             overflowX: "auto",
-            paddingBottom: "8px",
+            paddingTop: "4px",
+            paddingBottom: "12px",
+            paddingLeft: "2px",
+            paddingRight: "2px",
+            WebkitOverflowScrolling: "touch",
+            scrollbarWidth: "thin",
           }}
         >
           {books.map((book) => (
-            <div key={book.id} style={{ minWidth: "200px", maxWidth: "200px", flexShrink: 0 }}>
+            <div
+              key={book.id}
+              style={{
+                minWidth: "185px",
+                maxWidth: "200px",
+                flexShrink: 0,
+              }}
+            >
               <BookCard
                 book={book}
                 isFavorite={favorites.includes(book.id)}

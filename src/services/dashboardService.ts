@@ -1,4 +1,23 @@
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase";
+import { createInFlightDeduper } from "@/lib/asyncCache";
+import type { Task } from "@/services/plannerService";
+
+// Same cookie-aware singleton client as authService/middleware/server —
+// created explicitly here (instead of importing the old backward-compat
+// `supabase` export) so this file's session source is unambiguous. This is
+// the exact client this service's getCurrentUserId() reads the session
+// from, so it now sees the same login state as the rest of the app.
+const supabase = createClient();
+
+// getDashboard() below fires 8 of this class's methods at once via
+// Promise.all, and several of them independently call getCurrentUserId()
+// and/or getProfile() to answer the same "who is this, and what's their
+// profile" question at the same moment. These dedupers collapse those
+// overlapping calls into a single underlying request each, instead of each
+// method opening its own auth round trip / profile query — this was the
+// main reason the dashboard felt slow to load. See src/lib/asyncCache.ts.
+const dedupeUserId = createInFlightDeduper<string>();
+const dedupeProfile = createInFlightDeduper<DashboardProfile | null>();
 
 export interface DashboardStats {
   totalStudyTime: number;
@@ -61,44 +80,72 @@ export interface DashboardData {
   continueReading: ContinueReadingBook[];
   recentTests: RecentTest[];
   studyStreak: StudyStreak | null;
-  todayTasks: any[];
+  todayTasks: Task[];
+}
+
+// Raw Supabase row shapes (snake_case) for the tables this service reads
+// from directly — mirrors the columns defined in the migrations.
+interface FocusAreaRow {
+  id: string;
+  subject: string;
+  score: number;
+  level: "low" | "medium" | "high";
+}
+
+interface ContinueReadingRow {
+  book_id: string;
+  book_title: string;
+  chapter: number;
+  total_chapters: number;
+  progress: number;
+}
+
+interface RecentTestRow {
+  id: string;
+  title: string;
+  score: number;
+  total: number;
+  accuracy: number;
+  created_at: string;
 }
 
 class DashboardService {
 
   async getCurrentUserId(): Promise<string> {
+    return dedupeUserId("user-id", async () => {
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
 
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser();
+      if (error || !user) {
+        throw new Error("User not logged in");
+      }
 
-    if (error || !user) {
-      throw new Error("User not logged in");
-    }
-
-    return user.id;
+      return user.id;
+    });
   }
 
   async getProfile(): Promise<DashboardProfile | null> {
+    return dedupeProfile("profile", async () => {
+      const userId = await this.getCurrentUserId();
 
-    const userId = await this.getCurrentUserId();
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .single();
 
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", userId)
-      .single();
+      if (error) return null;
 
-    if (error) return null;
-
-    return {
-      id: data.id,
-      fullName: data.full_name,
-      firstName: data.first_name,
-      exam: data.exam,
-      streak: data.streak,
-    };
+      return {
+        id: data.id,
+        fullName: data.full_name,
+        firstName: data.first_name,
+        exam: data.exam,
+        streak: data.streak,
+      };
+    });
   }
 
   async getStats(): Promise<DashboardStats> {
@@ -109,7 +156,7 @@ class DashboardService {
       .from("dashboard_stats")
       .select("*")
       .eq("user_id", userId)
-      .single();
+      .maybeSingle();
 
     if (!data) {
       return {
@@ -136,7 +183,7 @@ class DashboardService {
       .from("rankings")
       .select("*")
       .eq("user_id", userId)
-      .single();
+      .maybeSingle();
 
     if (!data) return null;
 
@@ -164,7 +211,7 @@ class DashboardService {
 
     if (error || !data) return [];
 
-    return data.map((item) => ({
+    return (data as FocusAreaRow[]).map((item) => ({
       id: item.id,
       subject: item.subject,
       score: item.score,
@@ -189,7 +236,7 @@ class DashboardService {
 
     if (error || !data) return [];
 
-    return data.map((book) => ({
+    return (data as ContinueReadingRow[]).map((book) => ({
       id: book.book_id,
       title: book.book_title,
       chapter: book.chapter,
@@ -211,7 +258,7 @@ class DashboardService {
       .select("*")
       .eq("user_id", userId)
       .eq("exam_slug", profile.exam)
-      .single();
+      .maybeSingle();
 
     if (error || !data) return null;
 
@@ -241,7 +288,7 @@ class DashboardService {
 
     if (error || !data) return [];
 
-    return data.map((test) => ({
+    return (data as RecentTestRow[]).map((test) => ({
       id: test.id,
       title: test.title,
       score: test.score,
@@ -250,7 +297,7 @@ class DashboardService {
       createdAt: test.created_at,
     }));
   }
-    async getTodayTasks() {
+    async getTodayTasks(): Promise<Task[]> {
 
     const userId = await this.getCurrentUserId();
 
@@ -265,7 +312,7 @@ class DashboardService {
 
     if (error || !data) return [];
 
-    return data;
+    return data as Task[];
   }
 
   async getDashboard(): Promise<DashboardData> {

@@ -27,7 +27,7 @@ export interface VoiceStyleOption {
 export interface TextToAudioConfigState {
   text: string;
   language: SupportedLanguage;
-  voiceId: string;
+  voiceId: VoiceGender;
   style: VoiceStyle;
   speed: SpeechSpeed;
 }
